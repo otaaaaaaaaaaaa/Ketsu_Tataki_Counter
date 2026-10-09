@@ -254,3 +254,8 @@ def handle_message(event):
     except Exception as e:
 
         print("handle_messageエラー:", e)
+        
+    except Exception as e:
+
+        print(user_id)
+
