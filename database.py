@@ -110,19 +110,3 @@ def get_ranking():
     conn.close()
 
     return ranking
-
-def reset_all_points():
-
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-
-    cur.execute("""
-    UPDATE users
-    SET
-        total_points = 0,
-        current_points = 0,
-        used_count = 0
-    """)
-
-    conn.commit()
-    conn.close()
