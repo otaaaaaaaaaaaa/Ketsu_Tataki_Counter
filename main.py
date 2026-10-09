@@ -20,14 +20,6 @@ from linebot.models import (
     MessageAction
 )
 
-from database import (
-    init_db,
-    get_user,
-    create_user,
-    update_name,
-    get_ranking
-)
-
 from point_service import (
     add_point,
     consume_point
