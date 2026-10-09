@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI, Request
 
 from linebot import (
@@ -12,7 +14,10 @@ from linebot.exceptions import (
 from linebot.models import (
     MessageEvent,
     TextMessage,
-    TextSendMessage
+    TextSendMessage,
+    QuickReply,
+    QuickReplyButton,
+    MessageAction
 )
 
 from database import (
@@ -30,8 +35,14 @@ from point_service import (
 
 app = FastAPI()
 
-CHANNEL_ACCESS_TOKEN = "YOUR_CHANNEL_ACCESS_TOKEN"
-CHANNEL_SECRET = "YOUR_CHANNEL_SECRET"
+# Renderの環境変数から取得
+CHANNEL_ACCESS_TOKEN = os.getenv(
+    "CHANNEL_ACCESS_TOKEN"
+)
+
+CHANNEL_SECRET = os.getenv(
+    "CHANNEL_SECRET"
+)
 
 line_bot_api = LineBotApi(
     CHANNEL_ACCESS_TOKEN
@@ -44,8 +55,41 @@ handler = WebhookHandler(
 init_db()
 
 
+def get_quick_reply():
+
+    return QuickReply(
+        items=[
+            QuickReplyButton(
+                action=MessageAction(
+                    label="🍑 ケツ",
+                    text="ケツ"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="📊 ポイント",
+                    text="ポイント"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="🔥 消費",
+                    text="消費"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="🏆 ランキング",
+                    text="ランキング"
+                )
+            )
+        ]
+    )
+
+
 @app.get("/")
 def root():
+
     return {
         "status": "running"
     }
@@ -60,13 +104,26 @@ async def callback(request: Request):
         "X-Line-Signature"
     ]
 
+    print("Webhook受信")
+
     try:
+
         handler.handle(
             body.decode("utf-8"),
             signature
         )
+
     except InvalidSignatureError:
-        return {"error": "invalid signature"}
+
+        print("署名エラー")
+
+        return {
+            "error": "invalid signature"
+        }
+
+    except Exception as e:
+
+        print("エラー:", e)
 
     return "OK"
 
@@ -77,110 +134,114 @@ async def callback(request: Request):
 )
 def handle_message(event):
 
-    user_id = event.source.user_id
-    text = event.message.text
+    try:
 
-    profile = line_bot_api.get_profile(
-        user_id
-    )
+        user_id = event.source.user_id
+        text = event.message.text
 
-    display_name = profile.display_name
+        print("受信メッセージ:", text)
 
-    create_user(
-        user_id,
-        display_name
-    )
-
-    update_name(
-        user_id,
-        display_name
-    )
-
-    # ケツポイント追加
-
-    if text == "ケツ":
-
-        total, current = add_point(
+        profile = line_bot_api.get_profile(
             user_id
         )
 
-        reply = (
-            "🍑 ケツポイント +1\n\n"
-            f"所持ポイント: {current}pt\n"
-            f"累計ポイント: {total}pt"
+        display_name = (
+            profile.display_name
         )
 
-    # ポイント確認
-
-    elif text == "ポイント":
-
-        user = get_user(user_id)
-
-        reply = (
-            "📊 ポイント情報\n\n"
-            f"名前: {user[1]}\n"
-            f"所持ポイント: {user[3]}pt\n"
-            f"累計ポイント: {user[2]}pt\n"
-            f"消費回数: {user[4]}回"
+        create_user(
+            user_id,
+            display_name
         )
 
-    # 消費
-
-    elif text == "消費":
-
-        success, current = consume_point(
-            user_id
+        update_name(
+            user_id,
+            display_name
         )
 
-        if success:
+        if text == "ケツ":
+
+            total, current = add_point(
+                user_id
+            )
 
             reply = (
-                "✅ 50ポイント消費！\n\n"
-                f"残り: {current}pt"
+                "🍑 ケツポイント +1\n\n"
+                f"所持ポイント: {current}pt\n"
+                f"累計ポイント: {total}pt"
             )
+
+        elif text == "ポイント":
+
+            user = get_user(
+                user_id
+            )
+
+            reply = (
+                "📊 ポイント情報\n\n"
+                f"名前: {user[1]}\n"
+                f"所持ポイント: {user[3]}pt\n"
+                f"累計ポイント: {user[2]}pt\n"
+                f"消費回数: {user[4]}回"
+            )
+
+        elif text == "消費":
+
+            success, current = consume_point(
+                user_id
+            )
+
+            if success:
+
+                reply = (
+                    "✅ 50ポイント消費！\n\n"
+                    f"残り: {current}pt"
+                )
+
+            else:
+
+                reply = (
+                    "❌ ポイント不足\n\n"
+                    "必要: 50pt\n"
+                    f"現在: {current}pt"
+                )
+
+        elif text == "ランキング":
+
+            ranking = get_ranking()
+
+            msg = "🏆 ケツランキング\n\n"
+
+            for i, row in enumerate(
+                ranking,
+                start=1
+            ):
+
+                msg += (
+                    f"{i}位 "
+                    f"{row[0]} "
+                    f"{row[1]}pt\n"
+                )
+
+            reply = msg
 
         else:
 
             reply = (
-                "❌ ポイント不足\n\n"
-                "必要: 50pt\n"
-                f"現在: {current}pt"
+                "🍑 ケツ叩きカウンター\n\n"
+                "下のボタンから選んでね"
             )
 
-    # ランキング
-
-    elif text == "ランキング":
-
-        ranking = get_ranking()
-
-        msg = "🏆 ケツランキング\n\n"
-
-        for i, row in enumerate(
-            ranking,
-            start=1
-        ):
-            name = row[0]
-            point = row[1]
-
-            msg += (
-                f"{i}位 "
-                f"{name} "
-                f"{point}pt\n"
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(
+                text=reply,
+                quick_reply=get_quick_reply()
             )
-
-        reply = msg
-
-    else:
-
-        reply = (
-            "使えるコマンド\n\n"
-            "ケツ\n"
-            "ポイント\n"
-            "消費\n"
-            "ランキング"
         )
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply)
-    )
+        print("返信成功")
+
+    except Exception as e:
+
+        print("handle_messageエラー:", e)
