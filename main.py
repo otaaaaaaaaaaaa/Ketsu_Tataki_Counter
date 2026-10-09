@@ -33,6 +33,15 @@ from point_service import (
     consume_point
 )
 
+from database import (
+    init_db,
+    get_user,
+    create_user,
+    update_name,
+    get_ranking,
+    reset_all_points
+)
+
 app = FastAPI()
 
 # Renderの環境変数から取得
