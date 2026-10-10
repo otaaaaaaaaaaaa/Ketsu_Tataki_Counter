@@ -1,6 +1,6 @@
 from database import (
     get_user,
-    update_points
+    update_user
 )
 
 
@@ -8,39 +8,39 @@ def add_point(user_id):
 
     user = get_user(user_id)
 
-    total_points = user[2] + 1
-    current_points = user[3] + 1
-    used_count = user[4]
+    total = user["total_points"] + 1
+    current = user["current_points"] + 1
+    used = user["used_count"]
 
-    update_points(
+    update_user(
         user_id,
-        total_points,
-        current_points,
-        used_count
+        total,
+        current,
+        used
     )
 
-    return total_points, current_points
+    return total, current
 
 
 def consume_point(user_id):
 
     user = get_user(user_id)
 
-    total_points = user[2]
-    current_points = user[3]
-    used_count = user[4]
+    total = user["total_points"]
+    current = user["current_points"]
+    used = user["used_count"]
 
-    if current_points < 50:
-        return False, current_points
+    if current < 50:
+        return False, current
 
-    current_points -= 50
-    used_count += 1
+    current -= 50
+    used += 1
 
-    update_points(
+    update_user(
         user_id,
-        total_points,
-        current_points,
-        used_count
+        total,
+        current,
+        used
     )
 
-    return True, current_points
+    return True, current
