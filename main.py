@@ -21,11 +21,11 @@ from linebot.models import (
 )
 
 from database import (
-    init_db,
+    get_user,
     create_user,
     update_name,
-    get_user,
-    get_ranking
+    get_ranking,
+    reset_all_points
 )
 
 from point_service import (
@@ -35,13 +35,16 @@ from point_service import (
 
 app = FastAPI()
 
-# Renderの環境変数から取得
 CHANNEL_ACCESS_TOKEN = os.getenv(
     "CHANNEL_ACCESS_TOKEN"
 )
 
 CHANNEL_SECRET = os.getenv(
     "CHANNEL_SECRET"
+)
+
+ADMIN_USER_ID = os.getenv(
+    "ADMIN_USER_ID"
 )
 
 line_bot_api = LineBotApi(
@@ -51,8 +54,6 @@ line_bot_api = LineBotApi(
 handler = WebhookHandler(
     CHANNEL_SECRET
 )
-
-init_db()
 
 
 def get_quick_reply():
@@ -104,8 +105,6 @@ async def callback(request: Request):
         "X-Line-Signature"
     ]
 
-    print("Webhook受信")
-
     try:
 
         handler.handle(
@@ -115,15 +114,13 @@ async def callback(request: Request):
 
     except InvalidSignatureError:
 
-        print("署名エラー")
-
         return {
             "error": "invalid signature"
         }
 
     except Exception as e:
 
-        print("エラー:", e)
+        print("callbackエラー:", e)
 
     return "OK"
 
@@ -138,8 +135,6 @@ def handle_message(event):
 
         user_id = event.source.user_id
         text = event.message.text
-
-        print("受信メッセージ:", text)
 
         profile = line_bot_api.get_profile(
             user_id
@@ -159,6 +154,8 @@ def handle_message(event):
             display_name
         )
 
+        # ケツ
+
         if text == "ケツ":
 
             total, current = add_point(
@@ -171,19 +168,21 @@ def handle_message(event):
                 f"累計ポイント: {total}pt"
             )
 
+        # ポイント
+
         elif text == "ポイント":
 
-            user = get_user(
-                user_id
-            )
+            user = get_user(user_id)
 
             reply = (
                 "📊 ポイント情報\n\n"
-                f"名前: {user[1]}\n"
-                f"所持ポイント: {user[3]}pt\n"
-                f"累計ポイント: {user[2]}pt\n"
-                f"消費回数: {user[4]}回"
+                f"名前: {user['name']}\n"
+                f"所持ポイント: {user['current_points']}pt\n"
+                f"累計ポイント: {user['total_points']}pt\n"
+                f"消費回数: {user['used_count']}回"
             )
+
+        # 消費
 
         elif text == "消費":
 
@@ -206,6 +205,8 @@ def handle_message(event):
                     f"現在: {current}pt"
                 )
 
+        # ランキング
+
         elif text == "ランキング":
 
             ranking = get_ranking()
@@ -219,11 +220,29 @@ def handle_message(event):
 
                 msg += (
                     f"{i}位 "
-                    f"{row[0]} "
-                    f"{row[1]}pt\n"
+                    f"{row['name']} "
+                    f"{row['total_points']}pt\n"
                 )
 
             reply = msg
+
+        # リセット
+
+        elif text == "リセット":
+
+            if user_id == ADMIN_USER_ID:
+
+                reset_all_points()
+
+                reply = (
+                    "✅ 全ユーザーのポイントをリセットしました"
+                )
+
+            else:
+
+                reply = (
+                    "❌ 管理者専用コマンドです"
+                )
 
         else:
 
@@ -240,8 +259,9 @@ def handle_message(event):
             )
         )
 
-        print("返信成功")
-
     except Exception as e:
 
-        print("handle_messageエラー:", e)
+        print(
+            "handle_messageエラー:",
+            e
+        )
