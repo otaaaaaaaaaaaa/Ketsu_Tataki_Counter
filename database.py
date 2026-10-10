@@ -1,112 +1,96 @@
-import sqlite3
+import os
 
-DB_NAME = "users.db"
+from supabase import create_client
 
-
-def init_db():
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
-
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users (
-        user_id TEXT PRIMARY KEY,
-        name TEXT,
-        total_points INTEGER DEFAULT 0,
-        current_points INTEGER DEFAULT 0,
-        used_count INTEGER DEFAULT 0
-    )
-    """)
-
-    conn.commit()
-    conn.close()
+supabase = create_client(
+    os.getenv("SUPABASE_URL"),
+    os.getenv("SUPABASE_KEY")
+)
 
 
 def get_user(user_id):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
 
-    cur.execute(
-        "SELECT * FROM users WHERE user_id=?",
-        (user_id,)
+    result = (
+        supabase.table("users")
+        .select("*")
+        .eq("user_id", user_id)
+        .execute()
     )
 
-    user = cur.fetchone()
+    if result.data:
+        return result.data[0]
 
-    conn.close()
-
-    return user
+    return None
 
 
 def create_user(user_id, name):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
 
-    cur.execute("""
-    INSERT OR IGNORE INTO users
-    (user_id, name, total_points, current_points, used_count)
-    VALUES (?, ?, 0, 0, 0)
-    """, (user_id, name))
+    user = get_user(user_id)
 
-    conn.commit()
-    conn.close()
+    if user:
+        return
+
+    supabase.table("users").insert({
+        "user_id": user_id,
+        "name": name,
+        "total_points": 0,
+        "current_points": 0,
+        "used_count": 0
+    }).execute()
 
 
 def update_name(user_id, name):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
 
-    cur.execute("""
-    UPDATE users
-    SET name=?
-    WHERE user_id=?
-    """, (name, user_id))
-
-    conn.commit()
-    conn.close()
+    supabase.table("users").update({
+        "name": name
+    }).eq(
+        "user_id",
+        user_id
+    ).execute()
 
 
-def update_points(
+def update_user(
     user_id,
     total_points,
     current_points,
     used_count
 ):
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
 
-    cur.execute("""
-    UPDATE users
-    SET
-        total_points=?,
-        current_points=?,
-        used_count=?
-    WHERE user_id=?
-    """, (
-        total_points,
-        current_points,
-        used_count,
+    supabase.table(
+        "users"
+    ).update({
+        "total_points": total_points,
+        "current_points": current_points,
+        "used_count": used_count
+    }).eq(
+        "user_id",
         user_id
-    ))
-
-    conn.commit()
-    conn.close()
+    ).execute()
 
 
 def get_ranking():
-    conn = sqlite3.connect(DB_NAME)
-    cur = conn.cursor()
 
-    cur.execute("""
-    SELECT
-        name,
-        total_points
-    FROM users
-    ORDER BY total_points DESC
-    LIMIT 10
-    """)
+    result = (
+        supabase.table("users")
+        .select("*")
+        .order(
+            "total_points",
+            desc=True
+        )
+        .limit(10)
+        .execute()
+    )
 
-    ranking = cur.fetchall()
+    return result.data
 
-    conn.close()
 
-    return ranking
+def reset_all_points():
+
+    supabase.table("users").update({
+        "total_points": 0,
+        "current_points": 0,
+        "used_count": 0
+    }).neq(
+        "user_id",
+        ""
+    ).execute()
