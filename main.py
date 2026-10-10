@@ -265,3 +265,6 @@ def handle_message(event):
             "handle_messageエラー:",
             e
         )
+        
+        print(user_id)
+
