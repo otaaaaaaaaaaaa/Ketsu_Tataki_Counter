@@ -1,11 +1,5 @@
 import os
 
-
-print("SUPABASE_URL =", os.getenv("SUPABASE_URL"))
-print("SUPABASE_KEY =", os.getenv("SUPABASE_KEY"))
-
-
-
 from fastapi import FastAPI, Request
 
 from linebot import (
@@ -29,8 +23,8 @@ from linebot.models import (
 from database import (
     get_user,
     create_user,
-    update_name,
-    get_ranking,
+    get_total_ranking,
+    get_current_ranking,
     reset_all_points
 )
 
@@ -142,26 +136,23 @@ def handle_message(event):
         user_id = event.source.user_id
         text = event.message.text
 
-        profile = line_bot_api.get_profile(
-            user_id
-        )
+        user = get_user(user_id)
 
-        display_name = (
-            profile.display_name
-        )
+        # 初回参加時のみ登録
+        if not user:
 
-        create_user(
-            user_id,
-            display_name
-        )
+            profile = line_bot_api.get_profile(
+                user_id
+            )
 
-        update_name(
-            user_id,
-            display_name
-        )
+            create_user(
+                user_id,
+                profile.display_name
+            )
+
+            user = get_user(user_id)
 
         # ケツ
-
         if text == "ケツ":
 
             total, current = add_point(
@@ -175,7 +166,6 @@ def handle_message(event):
             )
 
         # ポイント
-
         elif text == "ポイント":
 
             user = get_user(user_id)
@@ -189,7 +179,6 @@ def handle_message(event):
             )
 
         # 消費
-
         elif text == "消費":
 
             success, current = consume_point(
@@ -212,28 +201,62 @@ def handle_message(event):
                 )
 
         # ランキング
-
         elif text == "ランキング":
 
-            ranking = get_ranking()
+            current_ranking = (
+                get_current_ranking()
+            )
 
-            msg = "🏆 ケツランキング\n\n"
+            total_ranking = (
+                get_total_ranking()
+            )
+
+            current_msg = (
+                "💰 現在ポイントランキング\n\n"
+            )
 
             for i, row in enumerate(
-                ranking,
+                current_ranking,
                 start=1
             ):
 
-                msg += (
+                current_msg += (
+                    f"{i}位 "
+                    f"{row['name']} "
+                    f"{row['current_points']}pt\n"
+                )
+
+            total_msg = (
+                "🏆 累計ポイントランキング\n\n"
+            )
+
+            for i, row in enumerate(
+                total_ranking,
+                start=1
+            ):
+
+                total_msg += (
                     f"{i}位 "
                     f"{row['name']} "
                     f"{row['total_points']}pt\n"
                 )
 
-            reply = msg
+            line_bot_api.reply_message(
+                event.reply_token,
+                [
+                    TextSendMessage(
+                        text=current_msg
+                    ),
+                    TextSendMessage(
+                        text=total_msg,
+                        quick_reply=get_quick_reply()
+                    )
+                ]
+            )
+
+            return
 
         # リセット
-
         elif text == "リセット":
 
             if user_id == ADMIN_USER_ID:
@@ -271,3 +294,34 @@ def handle_message(event):
             "handle_messageエラー:",
             e
         )
+
+def get_total_ranking():
+
+    result = (
+        supabase.table("users")
+        .select("name,total_points")
+        .order(
+            "total_points",
+            desc=True
+        )
+        .limit(10)
+        .execute()
+    )
+
+    return result.data
+
+
+def get_current_ranking():
+
+    result = (
+        supabase.table("users")
+        .select("name,current_points")
+        .order(
+            "current_points",
+            desc=True
+        )
+        .limit(10)
+        .execute()
+    )
+
+    return result.data
