@@ -294,34 +294,3 @@ def handle_message(event):
             "handle_messageエラー:",
             e
         )
-
-def get_total_ranking():
-
-    result = (
-        supabase.table("users")
-        .select("name,total_points")
-        .order(
-            "total_points",
-            desc=True
-        )
-        .limit(10)
-        .execute()
-    )
-
-    return result.data
-
-
-def get_current_ranking():
-
-    result = (
-        supabase.table("users")
-        .select("name,current_points")
-        .order(
-            "current_points",
-            desc=True
-        )
-        .limit(10)
-        .execute()
-    )
-
-    return result.data
