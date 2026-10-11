@@ -1,5 +1,4 @@
 import os
-
 from supabase import create_client
 
 supabase = create_client(
@@ -25,11 +24,6 @@ def get_user(user_id):
 
 def create_user(user_id, name):
 
-    user = get_user(user_id)
-
-    if user:
-        return
-
     supabase.table("users").insert({
         "user_id": user_id,
         "name": name,
@@ -39,16 +33,6 @@ def create_user(user_id, name):
     }).execute()
 
 
-def update_name(user_id, name):
-
-    supabase.table("users").update({
-        "name": name
-    }).eq(
-        "user_id",
-        user_id
-    ).execute()
-
-
 def update_user(
     user_id,
     total_points,
@@ -56,9 +40,7 @@ def update_user(
     used_count
 ):
 
-    supabase.table(
-        "users"
-    ).update({
+    supabase.table("users").update({
         "total_points": total_points,
         "current_points": current_points,
         "used_count": used_count
@@ -68,13 +50,29 @@ def update_user(
     ).execute()
 
 
-def get_ranking():
+def get_total_ranking():
 
     result = (
         supabase.table("users")
-        .select("*")
+        .select("name,total_points")
         .order(
             "total_points",
+            desc=True
+        )
+        .limit(10)
+        .execute()
+    )
+
+    return result.data
+
+
+def get_current_ranking():
+
+    result = (
+        supabase.table("users")
+        .select("name,current_points")
+        .order(
+            "current_points",
             desc=True
         )
         .limit(10)
