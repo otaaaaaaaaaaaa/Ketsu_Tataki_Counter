@@ -29,6 +29,7 @@ from database import (
     get_total_ranking,
     get_current_ranking,
     reset_all_points
+    add_oni_count
 )
 
 from point_service import (
@@ -70,6 +71,12 @@ def get_quick_reply():
                 action=MessageAction(
                     label="🍑 ケツ",
                     text="ケツ"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="👹 おに",
+                    text="おに"
                 )
             ),
             QuickReplyButton(
@@ -283,6 +290,21 @@ def handle_message(event):
             )
 
         # ----------------------
+        # おに
+        # ----------------------
+        
+        elif text == "おに":
+
+            oni_count = add_oni_count(
+                user_id
+            )
+
+            reply = (
+                "👹 おに回数 +1\n\n"
+                f"おに回数: {oni_count}回"
+            )
+
+        # ----------------------
         # 譲渡
         # ----------------------
 
@@ -328,6 +350,8 @@ def handle_message(event):
                 f"{user['total_points']}pt\n"
                 f"消費回数: "
                 f"{user['used_count']}回"
+                f"おに回数: "
+                f"{user['oni_count']}回"
             )
 
         # ----------------------
