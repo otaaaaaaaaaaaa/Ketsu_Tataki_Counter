@@ -27,7 +27,7 @@ from database import (
     get_current_ranking,
     reset_all_points,
     get_user_by_name,
-    transfer_points0
+    transfer_points
 )
 
 from point_service import (
