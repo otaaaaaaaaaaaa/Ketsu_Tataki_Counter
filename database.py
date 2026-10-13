@@ -59,6 +59,7 @@ def create_user(user_id, name):
         "total_points": 0,
         "current_points": 0,
         "used_count": 0
+        "oni_count": 0
     }).execute()
 
 
@@ -165,3 +166,18 @@ def reset_all_points():
         "user_id",
         ""
     ).execute()
+
+def add_oni_count(user_id):
+
+    user = get_user(user_id)
+
+    count = user["oni_count"] + 1
+
+    supabase.table("users").update({
+        "oni_count": count
+    }).eq(
+        "user_id",
+        user_id
+    ).execute()
+
+    return count
