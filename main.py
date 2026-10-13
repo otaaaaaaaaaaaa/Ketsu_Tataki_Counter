@@ -342,17 +342,13 @@ def handle_message(event):
 
             reply = (
                 "📊 ポイント情報\n\n"
-                f"名前: "
-                f"{user['name']}\n"
-                f"所持ポイント: "
-                f"{user['current_points']}pt\n"
-                f"累計ポイント: "
-                f"{user['total_points']}pt\n"
-                f"消費回数: "
-                f"{user['used_count']}回"
-                f"おに回数: "
-                f"{user['oni_count']}回"
+                f"名前: {user['name']}\n"
+                f"所持ポイント: {user['current_points']}pt\n"
+                f"累計ポイント: {user['total_points']}pt\n"
+                f"消費回数: {user['used_count']}回\n"
+                f"おに回数: {user['oni_count']}回"
             )
+
 
         # ----------------------
         # 消費
