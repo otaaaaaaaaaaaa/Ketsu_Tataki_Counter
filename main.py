@@ -28,7 +28,7 @@ from database import (
     transfer_points,
     get_total_ranking,
     get_current_ranking,
-    reset_all_points
+    reset_all_points,
     add_oni_count
 )
 
