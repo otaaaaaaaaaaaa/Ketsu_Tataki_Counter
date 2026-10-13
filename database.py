@@ -22,6 +22,35 @@ def get_user(user_id):
     return None
 
 
+def get_user_by_name(name):
+
+    result = (
+        supabase.table("users")
+        .select("*")
+        .eq("name", name)
+        .execute()
+    )
+
+    if result.data:
+        return result.data[0]
+
+    return None
+
+
+def get_all_names():
+
+    result = (
+        supabase.table("users")
+        .select("name")
+        .execute()
+    )
+
+    return [
+        row["name"]
+        for row in result.data
+    ]
+
+
 def create_user(user_id, name):
 
     supabase.table("users").insert({
@@ -48,6 +77,50 @@ def update_user(
         "user_id",
         user_id
     ).execute()
+
+
+def transfer_points(
+    sender_id,
+    receiver_name,
+    amount
+):
+
+    sender = get_user(sender_id)
+
+    receiver = get_user_by_name(
+        receiver_name
+    )
+
+    if not receiver:
+        return False, "ユーザーが見つかりません"
+
+    if amount <= 0:
+        return False, "1以上を入力してください"
+
+    if sender["current_points"] < amount:
+        return False, "ポイント不足"
+
+    supabase.table(
+        "users"
+    ).update({
+        "current_points":
+        sender["current_points"] - amount
+    }).eq(
+        "user_id",
+        sender_id
+    ).execute()
+
+    supabase.table(
+        "users"
+    ).update({
+        "current_points":
+        receiver["current_points"] + amount
+    }).eq(
+        "user_id",
+        receiver["user_id"]
+    ).execute()
+
+    return True, receiver
 
 
 def get_total_ranking():
@@ -92,58 +165,3 @@ def reset_all_points():
         "user_id",
         ""
     ).execute()
-
-def get_user_by_name(name):
-
-    result = (
-        supabase.table("users")
-        .select("*")
-        .eq("name", name)
-        .execute()
-    )
-
-    if result.data:
-        return result.data[0]
-
-    return None
-
-
-def transfer_points(
-    sender_id,
-    receiver_name,
-    amount
-):
-
-    sender = get_user(sender_id)
-
-    receiver = get_user_by_name(
-        receiver_name
-    )
-
-    if not receiver:
-        return False, "ユーザーが見つかりません"
-
-    if sender["current_points"] < amount:
-        return False, "ポイント不足"
-
-    supabase.table(
-        "users"
-    ).update({
-        "current_points":
-        sender["current_points"] - amount
-    }).eq(
-        "user_id",
-        sender_id
-    ).execute()
-
-    supabase.table(
-        "users"
-    ).update({
-        "current_points":
-        receiver["current_points"] + amount
-    }).eq(
-        "user_id",
-        receiver["user_id"]
-    ).execute()
-
-    return True, receiver
