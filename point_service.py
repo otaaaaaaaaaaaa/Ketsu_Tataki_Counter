@@ -3,6 +3,7 @@ from database import (
     update_user
 )
 
+
 def add_point(user_id):
 
     user = get_user(user_id)
