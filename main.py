@@ -25,7 +25,9 @@ from database import (
     create_user,
     get_total_ranking,
     get_current_ranking,
-    reset_all_points
+    reset_all_points,
+    get_user_by_name,
+    transfer_points0
 )
 
 from point_service import (
@@ -68,14 +70,20 @@ def get_quick_reply():
             ),
             QuickReplyButton(
                 action=MessageAction(
-                    label="📊 ポイント",
-                    text="ポイント"
+                    label="🎁 譲渡",
+                    text="譲渡"
                 )
             ),
             QuickReplyButton(
                 action=MessageAction(
                     label="🔥 消費",
                     text="消費"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="📊 ポイント",
+                    text="ポイント"
                 )
             ),
             QuickReplyButton(
