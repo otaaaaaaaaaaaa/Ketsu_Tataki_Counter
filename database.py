@@ -161,11 +161,13 @@ def reset_all_points():
     supabase.table("users").update({
         "total_points": 0,
         "current_points": 0,
-        "used_count": 0
+        "used_count": 0,
+        "oni_count": 0
     }).neq(
         "user_id",
         ""
     ).execute()
+
 
 def add_oni_count(user_id):
 
