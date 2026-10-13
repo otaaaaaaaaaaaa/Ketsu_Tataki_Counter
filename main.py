@@ -23,11 +23,12 @@ from linebot.models import (
 from database import (
     get_user,
     create_user,
+    get_user_by_name,
+    get_all_names,
+    transfer_points,
     get_total_ranking,
     get_current_ranking,
-    reset_all_points,
-    get_user_by_name,
-    transfer_points
+    reset_all_points
 )
 
 from point_service import (
@@ -56,6 +57,9 @@ line_bot_api = LineBotApi(
 handler = WebhookHandler(
     CHANNEL_SECRET
 )
+
+# 譲渡用
+transfer_waiting = {}
 
 
 def get_quick_reply():
@@ -128,7 +132,10 @@ async def callback(request: Request):
 
     except Exception as e:
 
-        print("callbackエラー:", e)
+        print(
+            "callbackエラー:",
+            e
+        )
 
     return "OK"
 
@@ -142,15 +149,17 @@ def handle_message(event):
     try:
 
         user_id = event.source.user_id
-        text = event.message.text
+        text = event.message.text.strip()
 
         user = get_user(user_id)
 
-        # 初回参加時のみ登録
+        # 初回登録
         if not user:
 
-            profile = line_bot_api.get_profile(
-                user_id
+            profile = (
+                line_bot_api.get_profile(
+                    user_id
+                )
             )
 
             create_user(
@@ -160,44 +169,185 @@ def handle_message(event):
 
             user = get_user(user_id)
 
-        # ケツ
-        if text == "ケツ":
+        # ----------------------
+        # 譲渡先入力待ち
+        # ----------------------
 
-            total, current = add_point(
-                user_id
+        if (
+            user_id in transfer_waiting
+            and
+            transfer_waiting[user_id][
+                "step"
+            ] == "select_user"
+        ):
+
+            target = text
+
+            target_user = (
+                get_user_by_name(
+                    target
+                )
+            )
+
+            if not target_user:
+
+                reply = (
+                    "❌ その名前は存在しません"
+                )
+
+            else:
+
+                transfer_waiting[user_id] = {
+                    "step":
+                    "input_amount",
+                    "target":
+                    target
+                }
+
+                reply = (
+                    f"{target}へ何ポイント譲渡しますか？\n\n"
+                    "数字だけ入力してください"
+                )
+
+        # ----------------------
+        # 譲渡金額入力待ち
+        # ----------------------
+
+        elif (
+            user_id in transfer_waiting
+            and
+            transfer_waiting[user_id][
+                "step"
+            ] == "input_amount"
+        ):
+
+            if not text.isdigit():
+
+                reply = (
+                    "❌ 数字だけ入力してください"
+                )
+
+            else:
+
+                amount = int(text)
+
+                target = (
+                    transfer_waiting[
+                        user_id
+                    ]["target"]
+                )
+
+                success, result = (
+                    transfer_points(
+                        user_id,
+                        target,
+                        amount
+                    )
+                )
+
+                if success:
+
+                    reply = (
+                        f"🎁 {target} に "
+                        f"{amount}pt譲渡しました"
+                    )
+
+                else:
+
+                    reply = (
+                        f"❌ {result}"
+                    )
+
+                del transfer_waiting[
+                    user_id
+                ]
+
+        # ----------------------
+        # ケツ
+        # ----------------------
+
+        elif text == "ケツ":
+
+            total, current = (
+                add_point(
+                    user_id
+                )
             )
 
             reply = (
                 "🍑 ケツポイント +1\n\n"
-                f"所持ポイント: {current}pt\n"
-                f"累計ポイント: {total}pt"
+                f"所持ポイント: "
+                f"{current}pt\n"
+                f"累計ポイント: "
+                f"{total}pt"
             )
 
+        # ----------------------
+        # 譲渡
+        # ----------------------
+
+        elif text == "譲渡":
+
+            names = get_all_names()
+
+            transfer_waiting[
+                user_id
+            ] = {
+                "step":
+                "select_user"
+            }
+
+            users_text = "\n".join(
+                names
+            )
+
+            reply = (
+                "🎁 譲渡モード\n\n"
+                "譲渡したい相手の名前を送信してください\n\n"
+                "【参加者一覧】\n"
+                f"{users_text}"
+            )
+
+        # ----------------------
         # ポイント
+        # ----------------------
+
         elif text == "ポイント":
 
-            user = get_user(user_id)
+            user = get_user(
+                user_id
+            )
 
             reply = (
                 "📊 ポイント情報\n\n"
-                f"名前: {user['name']}\n"
-                f"所持ポイント: {user['current_points']}pt\n"
-                f"累計ポイント: {user['total_points']}pt\n"
-                f"消費回数: {user['used_count']}回"
+                f"名前: "
+                f"{user['name']}\n"
+                f"所持ポイント: "
+                f"{user['current_points']}pt\n"
+                f"累計ポイント: "
+                f"{user['total_points']}pt\n"
+                f"消費回数: "
+                f"{user['used_count']}回"
             )
 
+        # ----------------------
         # 消費
+        # ----------------------
+
         elif text == "消費":
 
-            success, current = consume_point(
-                user_id
+            success, current = (
+                consume_point(
+                    user_id
+                )
             )
 
             if success:
 
                 reply = (
                     "✅ 50ポイント消費！\n\n"
-                    f"残り: {current}pt"
+                    f"残り: "
+                    f"{current}pt"
                 )
 
             else:
@@ -205,10 +355,14 @@ def handle_message(event):
                 reply = (
                     "❌ ポイント不足\n\n"
                     "必要: 50pt\n"
-                    f"現在: {current}pt"
+                    f"現在: "
+                    f"{current}pt"
                 )
 
+        # ----------------------
         # ランキング
+        # ----------------------
+
         elif text == "ランキング":
 
             current_ranking = (
@@ -257,14 +411,18 @@ def handle_message(event):
                     ),
                     TextSendMessage(
                         text=total_msg,
-                        quick_reply=get_quick_reply()
+                        quick_reply=
+                        get_quick_reply()
                     )
                 ]
             )
 
             return
 
+        # ----------------------
         # リセット
+        # ----------------------
+
         elif text == "リセット":
 
             if user_id == ADMIN_USER_ID:
@@ -292,7 +450,8 @@ def handle_message(event):
             event.reply_token,
             TextSendMessage(
                 text=reply,
-                quick_reply=get_quick_reply()
+                quick_reply=
+                get_quick_reply()
             )
         )
 
