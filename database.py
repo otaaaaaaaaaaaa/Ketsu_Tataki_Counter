@@ -58,7 +58,7 @@ def create_user(user_id, name):
         "name": name,
         "total_points": 0,
         "current_points": 0,
-        "used_count": 0
+        "used_count": 0,
         "oni_count": 0
     }).execute()
 
