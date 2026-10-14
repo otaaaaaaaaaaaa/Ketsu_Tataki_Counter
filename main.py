@@ -281,46 +281,71 @@ def handle_message(event):
 
             point_waiting[user_id] = True
 
-            reply = (
-                "ポイント種別を選んでください\n\n"
-                "🍑 ケツ (+1pt)\n"
-                "🩲 ノーパン (+20pt)\n"
-                "⭐ セックス (+5pt)"
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text="ポイント種別を選んでください",
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(
+                                    label="🍑 ケツ",
+                                    text="ケツ"
+                                )
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(
+                                    label="🩲 ノーパン",
+                                    text="ノーパン"
+                                )
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(
+                                    label="⭐ セックス",
+                                    text="セックス"
+                                )
+                            )
+                        ]
+                    )
+                )
             )
+
+            return
+
 
         elif (
             user_id in point_waiting
             and text in ["ケツ", "ノーパン", "セックス"]
         ):
 
-        if text == "ケツ":
-            add = 1
+            if text == "ケツ":
+                add = 1
 
-        elif text == "ノーパン":
-            add = 20
+            elif text == "ノーパン":
+                add = 20
 
-        else:
-            add = 5
+            else:
+                add = 5
 
-        user = get_user(user_id)
+            user = get_user(user_id)
 
-        total = user["total_points"] + add
-        current = user["current_points"] + add
+            total = user["total_points"] + add
+            current = user["current_points"] + add
 
-        update_user(
-            user_id,
-            total,
-            current,
-            user["used_count"]
-        )
+            update_user(
+                user_id,
+                total,
+                current,
+                user["used_count"]
+            )
 
-        del point_waiting[user_id]
+            del point_waiting[user_id]
 
-        reply = (
-            f"✅ {text} +{add}pt\n\n"
-            f"所持ポイント: {current}pt\n"
-            f"累計ポイント: {total}pt"
-        )
+            reply = (
+                f"✅ {text} +{add}pt\n\n"
+                f"所持ポイント: {current}pt\n"
+                f"累計ポイント: {total}pt"
+            )
 
         # ----------------------
         # おに
