@@ -29,7 +29,8 @@ from database import (
     get_total_ranking,
     get_current_ranking,
     reset_all_points,
-    add_oni_count
+    add_oni_count,
+    update_user
 )
 
 from point_service import (
@@ -62,6 +63,9 @@ handler = WebhookHandler(
 # 譲渡用
 transfer_waiting = {}
 
+# ケツポ選択待ち用
+point_waiting = {}
+
 
 def get_quick_reply():
 
@@ -69,8 +73,8 @@ def get_quick_reply():
         items=[
             QuickReplyButton(
                 action=MessageAction(
-                    label="🍑 ケツ",
-                    text="ケツ"
+                    label="🍑 ケツポ",
+                    text="ケツポ"
                 )
             ),
             QuickReplyButton(
@@ -273,21 +277,50 @@ def handle_message(event):
         # ケツ
         # ----------------------
 
-        elif text == "ケツ":
+        elif text == "ケツポ":
 
-            total, current = (
-                add_point(
-                    user_id
-                )
-            )
+            point_waiting[user_id] = True
 
             reply = (
-                "🍑 ケツポイント +1\n\n"
-                f"所持ポイント: "
-                f"{current}pt\n"
-                f"累計ポイント: "
-                f"{total}pt"
+                "ポイント種別を選んでください\n\n"
+                "🍑 ケツ (+1pt)\n"
+                "🩲 ノーパン (+20pt)\n"
+                "⭐ セックス (+5pt)"
             )
+
+        elif (
+            user_id in point_waiting
+            and text in ["ケツ", "ノーパン", "セックス"]
+        ):
+
+        if text == "ケツ":
+            add = 1
+
+        elif text == "ノーパン":
+            add = 20
+
+        else:
+            add = 5
+
+        user = get_user(user_id)
+
+        total = user["total_points"] + add
+        current = user["current_points"] + add
+
+        update_user(
+            user_id,
+            total,
+            current,
+            user["used_count"]
+        )
+
+        del point_waiting[user_id]
+
+        reply = (
+            f"✅ {text} +{add}pt\n\n"
+            f"所持ポイント: {current}pt\n"
+            f"累計ポイント: {total}pt"
+        )
 
         # ----------------------
         # おに
