@@ -66,6 +66,10 @@ transfer_waiting = {}
 # ケツポ選択待ち用
 point_waiting = {}
 
+# 回数入力待ち
+count_waiting = {}
+
+
 # ----------------------
 # ボタン
 # ----------------------
@@ -322,24 +326,79 @@ def handle_message(event):
             return
 
 
+        # 回数入力が必要なもの
         elif (
             user_id in point_waiting
-            and text in ["ケツ", "珍棒", "ノーパン", "セックス"]
+            and text in ["ケツ", "珍棒"]
         ):
 
-            if text == "ケツ":
-                add = 3
-                
-            elif text == "珍棒":
-                add = 10
+            count_waiting[user_id] = {
+                "type": text
+            }
 
-            elif text == "ノーパン":
-                add = 60
+            del point_waiting[user_id]
+
+            reply = (
+                f"{text}は何回でしたか？\n\n"
+                "数字だけ入力してください" 
+            )
+
+        # 回数入力後
+        elif (
+            user_id in count_waiting
+            and text.isdigit()
+        ):
+
+            count = int(text)
+
+            point_type = (
+                count_waiting[user_id]["type"]
+            )
+
+            if point_type == "ケツ":
+                add = count * 3
 
             else:
-                add = 15
+                add = count * 10
 
             user = get_user(user_id)
+
+            total = (
+                user["total_points"]
+                + add
+            )
+
+            current = (
+                user["current_points"]
+                + add
+            )
+
+            update_user(
+                user_id,
+                total,
+                current,
+                user["used_count"]
+            )
+
+            del count_waiting[user_id]
+
+            reply = (
+                f"✅ {point_type}\n\n"
+                f"回数: {count}回\n"
+                f"獲得: {add}pt\n\n"
+                f"所持ポイント: {current}pt\n"
+                f"累計ポイント: {total}pt"
+            )
+
+        # ノーパン固定
+        elif (
+            user_id in point_waiting
+            and text == "ノーパン"
+        ):
+
+            add = 60
+
+            user = get_user(user_id) 
 
             total = user["total_points"] + add
             current = user["current_points"] + add
@@ -354,7 +413,35 @@ def handle_message(event):
             del point_waiting[user_id]
 
             reply = (
-                f"✅ {text} +{add}pt\n\n"
+                f"✅ ノーパン +{add}pt\n\n"
+                f"所持ポイント: {current}pt\n"
+                f"累計ポイント: {total}pt"
+            )
+
+        # セックス固定
+        elif (
+            user_id in point_waiting
+            and text == "セックス"
+        ):
+
+            add = 15
+
+            user = get_user(user_id)
+
+            total = user["total_points"] + add
+            current = user["current_points"] + add
+
+            update_user(
+                user_id,
+                total,
+                current, 
+                user["used_count"]
+            )
+
+            del point_waiting[user_id]
+
+            reply = (
+                f"✅ セックス +{add}pt\n\n"
                 f"所持ポイント: {current}pt\n"
                 f"累計ポイント: {total}pt"
             )
