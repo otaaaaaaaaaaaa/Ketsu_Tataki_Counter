@@ -298,6 +298,12 @@ def handle_message(event):
                             ),
                             QuickReplyButton(
                                 action=MessageAction(
+                                    label="🌭 珍棒",
+                                    text="珍棒"
+                                )
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(
                                     label="🩲 ノーパン",
                                     text="ノーパン"
                                 )
@@ -318,17 +324,20 @@ def handle_message(event):
 
         elif (
             user_id in point_waiting
-            and text in ["ケツ", "ノーパン", "セックス"]
+            and text in ["ケツ", "珍棒", "ノーパン", "セックス"]
         ):
 
             if text == "ケツ":
                 add = 3
+                
+            elif text == "珍棒":
+                add = 10
 
             elif text == "ノーパン":
-                add = 20
+                add = 60
 
             else:
-                add = 5
+                add = 15
 
             user = get_user(user_id)
 
