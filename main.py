@@ -76,6 +76,12 @@ def get_quick_reply():
         items=[
             QuickReplyButton(
                 action=MessageAction(
+                    label="🍑 ケツ",
+                    text="ケツ"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
                     label="🍑 ケツポ",
                     text="ケツポ"
                 )
@@ -276,7 +282,12 @@ def handle_message(event):
                     user_id
                 ]
 
-        # ----------------------
+        user_id
+                ]
+
+ 
+
+# ----------------------
         # ケツポ
         # ----------------------
 
@@ -293,7 +304,7 @@ def handle_message(event):
                             QuickReplyButton(
                                 action=MessageAction(
                                     label="🍑 ケツ",
-                                    text="ケツ"
+                                    text="ケツ選択"
                                 )
                             ),
                             QuickReplyButton(
@@ -304,8 +315,8 @@ def handle_message(event):
                             ),
                             QuickReplyButton(
                                 action=MessageAction(
-                                    label="⭐ セックス",
-                                    text="セックス"
+                                    label="⭐ スペシャル",
+                                    text="スペシャル"
                                 )
                             )
                         ]
@@ -316,19 +327,23 @@ def handle_message(event):
             return
 
 
+
         elif (
             user_id in point_waiting
-            and text in ["ケツ", "ノーパン", "セックス"]
+            and text in ["ケツ選択", "ノーパン", "スペシャル"]
         ):
 
-            if text == "ケツ":
+            if text == "ケツ選択":
                 add = 1
+                display_name = "ケツ"
 
             elif text == "ノーパン":
                 add = 20
+                display_name = "ノーパン"
 
             else:
                 add = 5
+                display_name = "スペシャル"
 
             user = get_user(user_id)
 
@@ -345,10 +360,11 @@ def handle_message(event):
             del point_waiting[user_id]
 
             reply = (
-                f"✅ {text} +{add}pt\n\n"
+                f"✅ {display_name} +{add}pt\n\n"
                 f"所持ポイント: {current}pt\n"
                 f"累計ポイント: {total}pt"
             )
+
 
         # ----------------------
         # おに
