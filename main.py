@@ -396,7 +396,7 @@ def handle_message(event):
             and text == "ノーパン"
         ):
 
-            add = 60
+            add = 180
 
             user = get_user(user_id) 
 
