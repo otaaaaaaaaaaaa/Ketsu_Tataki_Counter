@@ -6,6 +6,7 @@ supabase = create_client(
     os.getenv("SUPABASE_KEY")
 )
 
+from datetime import datetime
 
 def get_user(user_id):
 
@@ -183,3 +184,49 @@ def add_oni_count(user_id):
     ).execute()
 
     return count
+
+def get_oni_card(card_no):
+
+    result = (
+        supabase.table("oni_cards")
+        .select("*")
+        .eq("card_no", card_no)
+        .execute()
+    )
+
+    if result.data:
+        return result.data[0]
+
+    return None
+
+def update_oni_card(
+    card_no,
+    user_id,
+    name
+):
+
+    supabase.table(
+        "oni_cards"
+    ).update({
+        "current_user_id": user_id,
+        "current_name": name,
+        "start_time":
+        datetime.now().isoformat()
+    }).eq(
+        "card_no",
+        card_no
+    ).execute()
+
+def add_oni_history(
+    card_no,
+    user_name,
+    seconds
+):
+
+    supabase.table(
+        "oni_history"
+    ).insert({
+        "card_no": card_no,
+        "user_name": user_name,
+        "seconds": seconds
+    }).execute()
