@@ -30,13 +30,18 @@ from database import (
     get_current_ranking,
     reset_all_points,
     add_oni_count,
-    update_user
+    update_user,
+    get_oni_card,
+    update_oni_card,
+    add_oni_history
 )
 
 from point_service import (
     add_point,
     consume_point
 )
+
+from datetime import datetime
 
 app = FastAPI()
 
