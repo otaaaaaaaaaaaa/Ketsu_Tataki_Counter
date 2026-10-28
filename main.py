@@ -121,6 +121,12 @@ def get_quick_reply():
                     label="🏆 ランキング",
                     text="ランキング"
                 )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="👑 鬼ランキング",
+                    text="鬼ランキング"
+                )
             )
         ]
     )
@@ -659,6 +665,44 @@ def handle_message(event):
             )
 
             return
+
+        # ----------------------
+        # 鬼ランキング
+        # ----------------------
+
+        elif text == "鬼ランキング":
+
+            ranking = get_oni_ranking()
+
+            msg = (
+                "👑 鬼ランキング\n\n"
+            )
+
+            for i, row in enumerate(
+                ranking,
+                start=1
+            ):
+
+                name = row[0]
+                seconds = row[1]
+
+                hours = (
+                    seconds // 3600
+                )
+
+                minutes = (
+                    (seconds % 3600)
+                    // 60
+                )
+
+                msg += (
+                    f"{i}位 "
+                    f"{name}\n"
+                    f"{hours}時間"
+                    f"{minutes}分\n\n"
+                )
+
+            reply = msg
 
         # ----------------------
         # リセット
