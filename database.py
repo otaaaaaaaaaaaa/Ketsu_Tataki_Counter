@@ -230,3 +230,31 @@ def add_oni_history(
         "user_name": user_name,
         "seconds": seconds
     }).execute()
+
+def get_oni_ranking():
+
+    result = (
+        supabase.table("oni_history")
+        .select("*")
+        .execute()
+    )
+
+    totals = {}
+
+    for row in result.data:
+
+        name = row["user_name"]
+        seconds = row["seconds"]
+
+        if name not in totals:
+            totals[name] = 0
+
+        totals[name] += seconds
+
+    ranking = sorted(
+        totals.items(),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    return ranking
