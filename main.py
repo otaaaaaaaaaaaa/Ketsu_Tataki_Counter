@@ -33,7 +33,8 @@ from database import (
     update_user,
     get_oni_card,
     update_oni_card,
-    add_oni_history
+    add_oni_history,
+    get_oni_ranking
 )
 
 from point_service import (
