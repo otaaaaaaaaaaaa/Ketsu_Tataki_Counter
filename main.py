@@ -74,6 +74,8 @@ point_waiting = {}
 # 回数入力待ち
 count_waiting = {}
 
+# おにカウント用
+oni_card_waiting = {}
 
 # ----------------------
 # ボタン
@@ -457,14 +459,70 @@ def handle_message(event):
         
         elif text == "おに":
 
-            oni_count = add_oni_count(
-                user_id
-            )
+            oni_card_waiting[user_id] = True
 
             reply = (
-                "👹 おに回数 +1\n\n"
-                f"おに回数: {oni_count}回"
+                "👹 鬼カード番号を入力してください\n\n"
+                "1\n"
+                "2\n"
+                "3\n"
+                "4\n"
+                "5"
             )
+
+        elif (
+            user_id in oni_card_waiting
+            and text in ["1","2","3","4","5"]
+        ):
+
+            card_no = int(text)
+
+            card = get_oni_card(
+                card_no
+            )
+
+            # 前の鬼がいる場合
+
+            if (
+                card["current_name"]
+                and
+                card["start_time"]
+            ):
+
+                start = (
+                    datetime.fromisoformat(
+                        card["start_time"]
+                    )
+                )
+
+                seconds = int(
+                    (
+                        datetime.now()
+                        - start
+                    ).total_seconds()
+                )
+
+                add_oni_history(
+                    card_no,
+                    card["current_name"],
+                    seconds
+                )
+
+            update_oni_card(
+                card_no,
+                user_id,
+                user["name"]
+            )
+
+            del oni_card_waiting[
+                user_id
+            ]
+
+            reply = (
+                f"👹 カード{card_no}で鬼登録\n\n"
+                "タイマー開始"
+            )
+
 
         # ----------------------
         # 譲渡
