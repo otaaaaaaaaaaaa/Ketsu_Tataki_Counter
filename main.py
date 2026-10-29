@@ -78,6 +78,9 @@ count_waiting = {}
 # おにカウント用
 oni_card_waiting = {}
 
+# アイテム用
+item_waiting = {}
+
 # ----------------------
 # ボタン
 # ----------------------
@@ -108,6 +111,12 @@ def get_quick_reply():
                 action=MessageAction(
                     label="🔥 消費",
                     text="消費"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="📦 アイテム",
+                    text="アイテム"
                 )
             ),
             QuickReplyButton(
