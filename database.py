@@ -258,3 +258,16 @@ def get_oni_ranking():
     )
 
     return ranking
+
+def get_items():
+
+    result = (
+        supabase.table("items")
+        .select("*")
+        .order(
+            "item_id"
+        )
+        .execute()
+    )
+
+    return result.data
