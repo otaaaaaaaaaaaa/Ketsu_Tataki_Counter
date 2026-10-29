@@ -682,21 +682,22 @@ def handle_message(event):
         # ----------------------
         # アイテム
         # ----------------------
-        
+
         elif text == "アイテム":
 
             item_waiting[user_id] = {
                 "step": "menu"
             }
+
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(
-                    reply = (
+                    text=(
                         "📦 アイテム\n\n"
                         "購入\n"
                         "使用"
-                    )
-                quick_reply=QuickReply(
+                    ),
+                    quick_reply=QuickReply(
                         items=[
                             QuickReplyButton(
                                 action=MessageAction(
