@@ -340,12 +340,6 @@ def handle_message(event):
                                     label="🩲 ノーパン",
                                     text="ノーパン"
                                 )
-                            ),
-                            QuickReplyButton(
-                                action=MessageAction(
-                                    label="⭐ セックス",
-                                    text="セックス"
-                                )
                             )
                         ]
                     )
@@ -385,10 +379,10 @@ def handle_message(event):
             )
 
             if point_type == "ケツ":
-                add = count * 3
+                add = count * 1
 
             else:
-                add = count * 10
+                add = count * 3
 
             user = get_user(user_id)
 
@@ -425,7 +419,7 @@ def handle_message(event):
             and text == "ノーパン"
         ):
 
-            add = 180
+            add = 20
 
             user = get_user(user_id) 
 
