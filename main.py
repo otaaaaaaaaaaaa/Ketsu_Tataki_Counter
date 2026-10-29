@@ -34,7 +34,8 @@ from database import (
     get_oni_card,
     update_oni_card,
     add_oni_history,
-    get_oni_ranking
+    get_oni_ranking,
+    get_items
 )
 
 from point_service import (
