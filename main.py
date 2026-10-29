@@ -91,61 +91,7 @@ item_waiting = {}
 # ボタン
 # ----------------------
 
-def get_quick_reply():
-
-    return QuickReply(
-        items=[
-            QuickReplyButton(
-                action=MessageAction(
-                    label="🍑 ケツポ",
-                    text="ケツポ"
-                )
-            ),
-            QuickReplyButton(
-                action=MessageAction(
-                    label="👹 おに",
-                    text="おに"
-                )
-            ),
-            QuickReplyButton(
-                action=MessageAction(
-                    label="🎁 譲渡",
-                    text="譲渡"
-                )
-            ),
-            QuickReplyButton(
-                action=MessageAction(
-                    label="🔥 消費",
-                    text="消費"
-                )
-            ),
-            QuickReplyButton(
-                action=MessageAction(
-                    label="📦 アイテム",
-                    text="アイテム"
-                )
-            ),
-            QuickReplyButton(
-                action=MessageAction(
-                    label="📊 ポイント",
-                    text="ポイント"
-                )
-            ),
-            QuickReplyButton(
-                action=MessageAction(
-                    label="🏆 ランキング",
-                    text="ランキング"
-                )
-            ),
-            QuickReplyButton(
-                action=MessageAction(
-                    label="👑 鬼ランキング",
-                    text="鬼ランキング"
-                )
-            )
-        ]
-    )
-
+# 入れるならここ
 
 @app.get("/")
 def root():
@@ -742,12 +688,34 @@ def handle_message(event):
             item_waiting[user_id] = {
                 "step": "menu"
             }
-
-            reply = (
-                "📦 アイテム\n\n"
-                "購入\n"
-                "使用"
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    reply = (
+                        "📦 アイテム\n\n"
+                        "購入\n"
+                        "使用"
+                    )
+                quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(
+                                    label="購入",
+                                    text="購入"
+                                )
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(
+                                    label="使用",
+                                    text="使用"
+                                )
+                            )
+                        ]
+                    )
+                )
             )
+
+            return
 
         elif (
             user_id in item_waiting
