@@ -733,6 +733,80 @@ def handle_message(event):
                     "❌ 管理者専用コマンドです"
                 )
 
+        # ----------------------
+        # アイテム
+        # ----------------------
+        
+        elif text == "アイテム":
+
+            item_waiting[user_id] = {
+                "step": "menu"
+            }
+
+            reply = (
+                "📦 アイテム\n\n"
+                "購入\n"
+                "使用"
+            )
+
+        elif (
+            user_id in item_waiting
+            and text == "購入"
+        ):
+            items = get_items()
+
+            msg = (
+                "🛒 アイテムショップ\n\n"
+            )
+
+            for item in items:
+
+                msg += (
+                    f"{item['item_id']} "
+                    f"{item['item_name']} "
+                    f"{item['price']}pt\n"
+                )
+
+            msg += (
+                "\n購入したい番号を入力"
+            )
+
+            item_waiting[user_id] = {
+                "step": "buy"
+            }
+
+            reply = msg
+
+        elif (
+            user_id in item_waiting
+            and
+            item_waiting[user_id]["step"]
+            == "buy"
+            and
+            text.isdigit()
+        ):
+
+            success, item = buy_item(
+                user_id,
+                int(text)
+            )
+
+            if success:
+
+                reply = (
+                    f"✅ "
+                    f"{item['item_name']}"
+                    "を購入しました"
+                )
+
+            else:
+
+                reply = (
+                    f"❌ {item}"
+                )
+
+            del item_waiting[user_id]
+
         else:
 
             reply = (
