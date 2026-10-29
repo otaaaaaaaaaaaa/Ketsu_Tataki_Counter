@@ -271,3 +271,101 @@ def get_items():
     )
 
     return result.data
+
+def get_item(item_id):
+
+    result = (
+        supabase.table("items")
+        .select("*")
+        .eq(
+            "item_id",
+            item_id
+        )
+        .execute()
+    )
+
+    if result.data:
+        return result.data[0]
+
+    return None
+
+def give_item(
+    user_id,
+    item_id
+):
+
+    result = (
+        supabase.table(
+            "user_items"
+        )
+        .select("*")
+        .eq(
+            "user_id",
+            user_id
+        )
+        .eq(
+            "item_id",
+            item_id
+        )
+        .execute()
+    )
+
+    if result.data:
+
+        item = result.data[0]
+
+        supabase.table(
+            "user_items"
+        ).update({
+            "quantity":
+            item["quantity"] + 1
+        }).eq(
+            "id",
+            item["id"]
+        ).execute()
+
+    else:
+
+        supabase.table(
+            "user_items"
+        ).insert({
+            "user_id":
+            user_id,
+            "item_id":
+            item_id,
+            "quantity":
+            1
+        }).execute()
+
+def buy_item(
+    user_id,
+    item_id
+):
+
+    user = get_user(user_id)
+
+    item = get_item(item_id)
+
+    if not item:
+        return False, "存在しません"
+
+    if (
+        user["current_points"]
+        < item["price"]
+    ):
+        return False, "ポイント不足"
+
+    update_user(
+        user_id,
+        user["total_points"],
+        user["current_points"]
+        - item["price"],
+        user["used_count"]
+    )
+
+    give_item(
+        user_id,
+        item_id
+    )
+
+    return True, item
