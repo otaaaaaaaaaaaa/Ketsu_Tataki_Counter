@@ -369,3 +369,71 @@ def buy_item(
     )
 
     return True, item
+
+def get_user_items(user_id):
+
+    result = (
+        supabase.table(
+            "user_items"
+        )
+        .select("*")
+        .eq(
+            "user_id",
+            user_id
+        )
+        .execute()
+    )
+
+    return result.data
+
+def use_item(
+    user_id,
+    item_id
+):
+
+    result = (
+        supabase.table(
+            "user_items"
+        )
+        .select("*")
+        .eq(
+            "user_id",
+            user_id
+        )
+        .eq(
+            "item_id",
+            item_id
+        )
+        .execute()
+    )
+
+    if not result.data:
+        return False
+
+    item = result.data[0]
+
+    if item["quantity"] <= 0:
+        return False
+
+    if item["quantity"] == 1:
+
+        supabase.table(
+            "user_items"
+        ).delete().eq(
+            "id",
+            item["id"]
+        ).execute()
+
+    else:
+
+        supabase.table(
+            "user_items"
+        ).update({
+            "quantity":
+            item["quantity"] - 1
+        }).eq(
+            "id",
+            item["id"]
+        ).execute()
+
+    return True
