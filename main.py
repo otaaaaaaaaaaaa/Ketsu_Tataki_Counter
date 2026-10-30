@@ -91,6 +91,7 @@ def get_quick_reply():
     """よく使うコマンドをボタンで表示する"""
 
     commands = [
+        ("アナル", "アナル"),
     ]
 
     return QuickReply(
