@@ -82,6 +82,17 @@ count_waiting = {}
 oni_card_waiting = {}
 item_waiting = {}
 
+
+# ----------------------
+# クイックリプライ
+# ----------------------
+
+def get_quick_reply():
+    return QuickReply(
+        items=[]
+    )
+
+
 # ----------------------
 # トップページ
 # ----------------------
