@@ -388,32 +388,6 @@ def handle_message(event):
             )
 
         # セックス固定
-        elif (
-            user_id in point_waiting
-            and text == "セックス"
-        ):
-
-            add = 15
-
-            user = get_user(user_id)
-
-            total = user["total_points"] + add
-            current = user["current_points"] + add
-
-            update_user(
-                user_id,
-                total,
-                current, 
-                user["used_count"]
-            )
-
-            del point_waiting[user_id]
-
-            reply = (
-                f"✅ セックス +{add}pt\n\n"
-                f"所持ポイント: {current}pt\n"
-                f"累計ポイント: {total}pt"
-            )
 
         # ----------------------
         # おに
@@ -536,30 +510,7 @@ def handle_message(event):
         # 消費
         # ----------------------
 
-        elif text == "消費":
-
-            success, current = (
-                consume_point(
-                    user_id
-                )
-            )
-
-            if success:
-
-                reply = (
-                    "✅ 50ポイント消費！\n\n"
-                    f"残り: "
-                    f"{current}pt"
-                )
-
-            else:
-
-                reply = (
-                    "❌ ポイント不足\n\n"
-                    "必要: 50pt\n"
-                    f"現在: "
-                    f"{current}pt"
-                )
+        
 
         # ----------------------
         # ランキング
