@@ -88,8 +88,29 @@ item_waiting = {}
 # ----------------------
 
 def get_quick_reply():
+    """よく使うコマンドをボタンで表示する"""
+
+    commands = [
+        ("ケツポ", "ケツポ"),
+        ("おに", "おに"),
+        ("譲渡", "譲渡"),
+        ("ポイント", "ポイント"),
+        ("消費", "消費"),
+        ("ランキング", "ランキング"),
+        ("鬼ランキング", "鬼ランキング"),
+        ("アイテム", "アイテム"),
+    ]
+
     return QuickReply(
-        items=[]
+        items=[
+            QuickReplyButton(
+                action=MessageAction(
+                    label=label,
+                    text=command
+                )
+            )
+            for label, command in commands
+        ]
     )
 
 
