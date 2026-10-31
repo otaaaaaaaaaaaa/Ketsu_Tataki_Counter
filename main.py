@@ -82,6 +82,7 @@ point_waiting = {}
 count_waiting = {}
 oni_card_waiting = {}
 item_waiting = {}
+item_action_waiting = {}
 
 
 # ----------------------
@@ -92,7 +93,7 @@ def get_quick_reply():
     """よく使うコマンドをボタンで表示する"""
 
     commands = [
-        ("アナル", "アナル"),
+        ("＊", "アナル"),
     ]
 
     return QuickReply(
