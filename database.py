@@ -437,3 +437,14 @@ def use_item(
         ).execute()
 
     return True
+
+def get_all_oni_cards():
+
+    result = (
+        supabase.table("oni_cards")
+        .select("*")
+        .order("card_no")
+        .execute()
+    )
+
+    return result.data
