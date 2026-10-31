@@ -192,6 +192,93 @@ def handle_message(event):
 
             user = get_user(user_id)
 
+
+        # ----------------------
+        # 鬼引渡しカード
+        # ----------------------
+
+        if (
+            user_id in item_action_waiting
+            and item_action_waiting[user_id]["type"]
+            == "oni_transfer"
+        ):
+
+            target_user = get_user_by_name(
+                text
+            )
+
+            if not target_user:
+
+                reply = (
+                    "❌ その名前は存在しません"
+                )
+
+            else:
+
+                cards = get_all_oni_cards()
+
+                active_card = None
+
+                for card in cards:
+
+                    if card["current_name"]:
+
+                        active_card = card
+
+                        break
+
+                if not active_card:
+
+                    reply = (
+                        "❌ 現在鬼が登録されていません"
+                    )
+
+                else:
+
+                    start = datetime.fromisoformat(
+                        active_card["start_time"]
+                    )
+
+                    now = (
+                        datetime.now(
+                            start.tzinfo
+                        )
+                        if start.tzinfo
+                        else datetime.now()
+                    )
+
+                    seconds = int(
+                        (
+                            now - start
+                        ).total_seconds()
+                    )
+
+                    add_oni_history(
+                        active_card["card_no"],
+                        active_card["current_name"],
+                        max(
+                            0,
+                            seconds
+                        )
+                    )
+
+                    update_oni_card(
+                        active_card["card_no"],
+                        target_user["user_id"],
+                        target_user["name"]
+                    )
+
+                    reply = (
+                        f"✅ 鬼を "
+                        f"{target_user['name']}"
+                        " に引き渡しました"
+                    )
+
+                del item_action_waiting[
+                    user_id
+                ]
+
+
         # ----------------------
         # 譲渡先入力待ち
         # ----------------------
@@ -792,7 +879,7 @@ def handle_message(event):
                     reply = msg
 
         # ----------------------
-        # アイテム使用処理
+        # アイテム使用
         # ----------------------
 
         elif (
@@ -803,44 +890,85 @@ def handle_message(event):
 
             item_id = int(text)
 
-            available_items = item_waiting[
-                user_id
-            ].get("available_items", [])
+            available_items = item_waiting[user_id].get(
+                "available_items",
+                []
+            )
 
             if item_id not in available_items:
 
                 reply = (
-                    "所持アイテムの番号を入力してください"
+                    "❌ 所持アイテムの番号を入力してください"
                 )
 
             else:
 
-                success = use_item(
-                    user_id,
-                    item_id
-                )
-
                 item_info = get_item(item_id)
 
-                if success:
-
-                    item_name = (
-                        item_info["item_name"]
-                        if item_info
-                        else f"アイテム{item_id}"
-                    )
+                if not item_info:
 
                     reply = (
-                        f"{item_name}を使用しました"
+                        "❌ アイテムが見つかりません"
                     )
 
                 else:
 
-                    reply = (
-                        "アイテムを使用できませんでした"
+                    item_name = item_info["item_name"]
+
+                    success = use_item(
+                        user_id,
+                        item_id
                     )
 
-                del item_waiting[user_id]
+                    if not success:
+
+                        reply = (
+                            "❌ アイテムを使用できませんでした"
+                        )
+
+                    # 鬼チェッカー
+                    elif item_name == "鬼チェッカー":
+
+                        cards = get_all_oni_cards()
+
+                        reply = (
+                            "👹 現在の鬼\n\n"
+                        )
+
+                        for card in cards:
+
+                            name = (
+                                card["current_name"]
+                                if card["current_name"]
+                                else "なし"
+                            )
+
+                            reply += (
+                                f"カード{card['card_no']} : "
+                                f"{name}\n"
+                            )
+
+                    # 鬼引渡しカード
+                    elif item_name == "鬼引渡しカード":
+
+                        item_action_waiting[
+                            user_id
+                        ] = {
+                            "type": "oni_transfer"
+                        }
+
+                        reply = (
+                            "鬼を引き渡す相手の名前を入力してください"
+                        )
+
+                    else:
+
+                        reply = (
+                            f"✅ {item_name}を使用しました"
+                        )
+
+                    del item_waiting[user_id]
+
 
         # ----------------------
         # アイテム購入処理
