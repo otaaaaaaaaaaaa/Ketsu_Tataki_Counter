@@ -1,15 +1,24 @@
 import os
+from datetime import datetime
+
 from supabase import create_client
+
+
+# ========================================
+# Supabase 接続
+# ========================================
 
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_KEY")
 )
 
-from datetime import datetime
+
+# ========================================
+# ユーザー関連
+# ========================================
 
 def get_user(user_id):
-
     result = (
         supabase.table("users")
         .select("*")
@@ -24,7 +33,6 @@ def get_user(user_id):
 
 
 def get_user_by_name(name):
-
     result = (
         supabase.table("users")
         .select("*")
@@ -39,7 +47,6 @@ def get_user_by_name(name):
 
 
 def get_all_names():
-
     result = (
         supabase.table("users")
         .select("name")
@@ -53,7 +60,6 @@ def get_all_names():
 
 
 def create_user(user_id, name):
-
     supabase.table("users").insert({
         "user_id": user_id,
         "name": name,
@@ -70,7 +76,6 @@ def update_user(
     current_points,
     used_count
 ):
-
     supabase.table("users").update({
         "total_points": total_points,
         "current_points": current_points,
@@ -81,17 +86,21 @@ def update_user(
     ).execute()
 
 
+# ========================================
+# ポイント移動
+# ========================================
+
 def transfer_points(
     sender_id,
     receiver_name,
     amount
 ):
-
     sender = get_user(sender_id)
 
-    receiver = get_user_by_name(
-        receiver_name
-    )
+    if not sender:
+        return False, "送信者が見つかりません"
+
+    receiver = get_user_by_name(receiver_name)
 
     if not receiver:
         return False, "ユーザーが見つかりません"
@@ -102,21 +111,19 @@ def transfer_points(
     if sender["current_points"] < amount:
         return False, "ポイント不足"
 
-    supabase.table(
-        "users"
-    ).update({
+    # 送信者のポイントを減らす
+    supabase.table("users").update({
         "current_points":
-        sender["current_points"] - amount
+            sender["current_points"] - amount
     }).eq(
         "user_id",
         sender_id
     ).execute()
 
-    supabase.table(
-        "users"
-    ).update({
+    # 受信者のポイントを増やす
+    supabase.table("users").update({
         "current_points":
-        receiver["current_points"] + amount
+            receiver["current_points"] + amount
     }).eq(
         "user_id",
         receiver["user_id"]
@@ -125,15 +132,15 @@ def transfer_points(
     return True, receiver
 
 
-def get_total_ranking():
+# ========================================
+# ランキング
+# ========================================
 
+def get_total_ranking():
     result = (
         supabase.table("users")
         .select("name,total_points")
-        .order(
-            "total_points",
-            desc=True
-        )
+        .order("total_points", desc=True)
         .limit(10)
         .execute()
     )
@@ -142,14 +149,10 @@ def get_total_ranking():
 
 
 def get_current_ranking():
-
     result = (
         supabase.table("users")
         .select("name,current_points")
-        .order(
-            "current_points",
-            desc=True
-        )
+        .order("current_points", desc=True)
         .limit(10)
         .execute()
     )
@@ -157,8 +160,11 @@ def get_current_ranking():
     return result.data
 
 
-def reset_all_points():
+# ========================================
+# ポイントのみリセット
+# ========================================
 
+def reset_all_points():
     supabase.table("users").update({
         "total_points": 0,
         "current_points": 0,
@@ -170,11 +176,17 @@ def reset_all_points():
     ).execute()
 
 
-def add_oni_count(user_id):
+# ========================================
+# 鬼になった回数
+# ========================================
 
+def add_oni_count(user_id):
     user = get_user(user_id)
 
-    count = user["oni_count"] + 1
+    if not user:
+        return None
+
+    count = (user.get("oni_count") or 0) + 1
 
     supabase.table("users").update({
         "oni_count": count
@@ -185,8 +197,12 @@ def add_oni_count(user_id):
 
     return count
 
-def get_oni_card(card_no):
 
+# ========================================
+# 鬼カード
+# ========================================
+
+def get_oni_card(card_no):
     result = (
         supabase.table("oni_cards")
         .select("*")
@@ -199,40 +215,50 @@ def get_oni_card(card_no):
 
     return None
 
+
 def update_oni_card(
     card_no,
     user_id,
     name
 ):
-
-    supabase.table(
-        "oni_cards"
-    ).update({
+    supabase.table("oni_cards").update({
         "current_user_id": user_id,
         "current_name": name,
-        "start_time":
-        datetime.now().isoformat()
+        "start_time": datetime.now().isoformat()
     }).eq(
         "card_no",
         card_no
     ).execute()
+
+
+def get_all_oni_cards():
+    result = (
+        supabase.table("oni_cards")
+        .select("*")
+        .order("card_no")
+        .execute()
+    )
+
+    return result.data
+
+
+# ========================================
+# 鬼の履歴・ランキング
+# ========================================
 
 def add_oni_history(
     card_no,
     user_name,
     seconds
 ):
-
-    supabase.table(
-        "oni_history"
-    ).insert({
+    supabase.table("oni_history").insert({
         "card_no": card_no,
         "user_name": user_name,
         "seconds": seconds
     }).execute()
 
-def get_oni_ranking():
 
+def get_oni_ranking():
     result = (
         supabase.table("oni_history")
         .select("*")
@@ -242,9 +268,8 @@ def get_oni_ranking():
     totals = {}
 
     for row in result.data:
-
         name = row["user_name"]
-        seconds = row["seconds"]
+        seconds = row["seconds"] or 0
 
         if name not in totals:
             totals[name] = 0
@@ -259,28 +284,27 @@ def get_oni_ranking():
 
     return ranking
 
-def get_items():
 
+# ========================================
+# アイテムショップ
+# ========================================
+
+def get_items():
     result = (
         supabase.table("items")
         .select("*")
-        .order(
-            "item_id"
-        )
+        .order("item_id")
         .execute()
     )
 
     return result.data
 
-def get_item(item_id):
 
+def get_item(item_id):
     result = (
         supabase.table("items")
         .select("*")
-        .eq(
-            "item_id",
-            item_id
-        )
+        .eq("item_id", item_id)
         .execute()
     )
 
@@ -289,77 +313,66 @@ def get_item(item_id):
 
     return None
 
+
+# ========================================
+# アイテム付与
+# ========================================
+
 def give_item(
     user_id,
     item_id
 ):
-
     result = (
-        supabase.table(
-            "user_items"
-        )
+        supabase.table("user_items")
         .select("*")
-        .eq(
-            "user_id",
-            user_id
-        )
-        .eq(
-            "item_id",
-            item_id
-        )
+        .eq("user_id", user_id)
+        .eq("item_id", item_id)
         .execute()
     )
 
     if result.data:
-
         item = result.data[0]
 
-        supabase.table(
-            "user_items"
-        ).update({
-            "quantity":
-            item["quantity"] + 1
+        supabase.table("user_items").update({
+            "quantity": item["quantity"] + 1
         }).eq(
             "id",
             item["id"]
         ).execute()
 
     else:
-
-        supabase.table(
-            "user_items"
-        ).insert({
-            "user_id":
-            user_id,
-            "item_id":
-            item_id,
-            "quantity":
-            1
+        supabase.table("user_items").insert({
+            "user_id": user_id,
+            "item_id": item_id,
+            "quantity": 1
         }).execute()
+
+
+# ========================================
+# アイテム購入
+# ========================================
 
 def buy_item(
     user_id,
     item_id
 ):
-
     user = get_user(user_id)
+
+    if not user:
+        return False, "ユーザーが見つかりません"
 
     item = get_item(item_id)
 
     if not item:
-        return False, "存在しません"
+        return False, "商品が存在しません"
 
-    if (
-        user["current_points"]
-        < item["price"]
-    ):
+    if user["current_points"] < item["price"]:
         return False, "ポイント不足"
 
     update_user(
         user_id,
         user["total_points"],
-        user["current_points"]
-        - item["price"],
+        user["current_points"] - item["price"],
         user["used_count"]
     )
 
@@ -370,40 +383,35 @@ def buy_item(
 
     return True, item
 
-def get_user_items(user_id):
 
+# ========================================
+# 所持アイテム取得
+# ========================================
+
+def get_user_items(user_id):
     result = (
-        supabase.table(
-            "user_items"
-        )
+        supabase.table("user_items")
         .select("*")
-        .eq(
-            "user_id",
-            user_id
-        )
+        .eq("user_id", user_id)
         .execute()
     )
 
     return result.data
 
+
+# ========================================
+# アイテム使用
+# ========================================
+
 def use_item(
     user_id,
     item_id
 ):
-
     result = (
-        supabase.table(
-            "user_items"
-        )
+        supabase.table("user_items")
         .select("*")
-        .eq(
-            "user_id",
-            user_id
-        )
-        .eq(
-            "item_id",
-            item_id
-        )
+        .eq("user_id", user_id)
+        .eq("item_id", item_id)
         .execute()
     )
 
@@ -416,21 +424,14 @@ def use_item(
         return False
 
     if item["quantity"] == 1:
-
-        supabase.table(
-            "user_items"
-        ).delete().eq(
+        supabase.table("user_items").delete().eq(
             "id",
             item["id"]
         ).execute()
 
     else:
-
-        supabase.table(
-            "user_items"
-        ).update({
-            "quantity":
-            item["quantity"] - 1
+        supabase.table("user_items").update({
+            "quantity": item["quantity"] - 1
         }).eq(
             "id",
             item["id"]
@@ -438,19 +439,12 @@ def use_item(
 
     return True
 
-def get_all_oni_cards():
 
-    result = (
-        supabase.table("oni_cards")
-        .select("*")
-        .order("card_no")
-        .execute()
-    )
-
-    return result.data
+# ========================================
+# 全ユーザーにポイントを追加
+# ========================================
 
 def add_points_all(amount):
-
     result = (
         supabase.table("users")
         .select("*")
@@ -458,42 +452,58 @@ def add_points_all(amount):
     )
 
     for user in result.data:
-
-        supabase.table(
-            "users"
-        ).update({
+        supabase.table("users").update({
             "current_points":
-            user["current_points"] + amount,
-
+                user["current_points"] + amount,
             "total_points":
-            user["total_points"] + amount
+                user["total_points"] + amount
         }).eq(
             "user_id",
             user["user_id"]
         ).execute()
 
 
-# ① 全ユーザーのポイントとカウントをリセット
-supabase.table("users").update({
-    "total_points": 0,
-    "current_points": 0,
-    "used_count": 0,
-    "oni_count": 0
-}).neq("user_id", "").execute()
+# ========================================
+# 全データリセット
+# ========================================
 
-# ② 鬼カードの現在の登録情報をリセット
-supabase.table("oni_cards").update({
-    "current_user_id": None,
-    "current_name": None,
-    "start_time": None
-}).gte("card_no", 1).execute()
+def reset_all_data():
+    """
+    全ユーザーのポイント、鬼の記録、
+    所持アイテムをリセットする。
 
-# ③ 鬼の履歴をすべて削除
-supabase.table("oni_history").delete().gte(
-    "card_no", 1
-).execute()
+    ユーザー登録とショップの商品一覧は維持する。
+    """
 
-# ④ 全ユーザーの所持アイテムを削除
-supabase.table("user_items").delete().neq(
-    "user_id", ""
-).execute()
+    # ① ポイントとカウントをリセット
+    supabase.table("users").update({
+        "total_points": 0,
+        "current_points": 0,
+        "used_count": 0,
+        "oni_count": 0
+    }).neq(
+        "user_id",
+        ""
+    ).execute()
+
+    # ② 鬼カード1〜5の登録情報をリセット
+    supabase.table("oni_cards").update({
+        "current_user_id": None,
+        "current_name": None,
+        "start_time": None
+    }).in_(
+        "card_no",
+        [1, 2, 3, 4, 5]
+    ).execute()
+
+    # ③ 鬼の履歴をすべて削除
+    supabase.table("oni_history").delete().gte(
+        "card_no",
+        1
+    ).execute()
+
+    # ④ 全ユーザーの所持アイテムを削除
+    supabase.table("user_items").delete().neq(
+        "user_id",
+        ""
+    ).execute()
