@@ -471,3 +471,29 @@ def add_points_all(amount):
             "user_id",
             user["user_id"]
         ).execute()
+
+
+# ① 全ユーザーのポイントとカウントをリセット
+supabase.table("users").update({
+    "total_points": 0,
+    "current_points": 0,
+    "used_count": 0,
+    "oni_count": 0
+}).neq("user_id", "").execute()
+
+# ② 鬼カードの現在の登録情報をリセット
+supabase.table("oni_cards").update({
+    "current_user_id": None,
+    "current_name": None,
+    "start_time": None
+}).gte("card_no", 1).execute()
+
+# ③ 鬼の履歴をすべて削除
+supabase.table("oni_history").delete().gte(
+    "card_no", 1
+).execute()
+
+# ④ 全ユーザーの所持アイテムを削除
+supabase.table("user_items").delete().neq(
+    "user_id", ""
+).execute()
