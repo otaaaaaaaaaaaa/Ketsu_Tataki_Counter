@@ -448,3 +448,26 @@ def get_all_oni_cards():
     )
 
     return result.data
+
+def add_points_all(amount):
+
+    result = (
+        supabase.table("users")
+        .select("*")
+        .execute()
+    )
+
+    for user in result.data:
+
+        supabase.table(
+            "users"
+        ).update({
+            "current_points":
+            user["current_points"] + amount,
+
+            "total_points":
+            user["total_points"] + amount
+        }).eq(
+            "user_id",
+            user["user_id"]
+        ).execute()
