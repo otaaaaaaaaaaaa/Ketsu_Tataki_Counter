@@ -83,6 +83,7 @@ count_waiting = {}
 oni_card_waiting = {}
 item_waiting = {}
 item_action_waiting = {}
+oni_setup_waiting = {}
 
 
 # ----------------------
@@ -277,6 +278,103 @@ def handle_message(event):
                 del item_action_waiting[
                     user_id
                 ]
+
+
+        # ----------------------
+        # 鬼設定入力待ち
+        # ----------------------
+
+        if (
+            user_id in oni_setup_waiting
+        ):
+
+            lines = text.split("\n")
+
+            success_count = 0
+
+            for line in lines:
+
+                parts = line.strip().split()
+
+                if len(parts) != 2:
+                    continue
+
+                card_text = parts[0]
+                target_name = parts[1]
+
+                if not card_text.isdigit():
+                    continue
+
+                card_no = int(card_text)
+
+                if card_no not in [1,2,3,4,5]:
+                    continue
+
+                target_user = (
+                    get_user_by_name(
+                        target_name
+                    )
+                )
+
+                if not target_user:
+                    continue
+
+                # 既存鬼がいたら時間保存
+
+                card = get_oni_card(
+                    card_no
+                )
+
+                if (
+                    card
+                    and card["current_name"]
+                    and card["start_time"]
+                ):
+
+                    start = (
+                        datetime.fromisoformat(
+                            card["start_time"]
+                        )
+                    )
+
+                    now = (
+                        datetime.now(
+                            start.tzinfo
+                        )
+                        if start.tzinfo
+                        else datetime.now()
+                    )
+
+                    seconds = int(
+                        (
+                            now - start
+                        ).total_seconds()
+                    )
+
+                    add_oni_history(
+                        card_no,
+                        card["current_name"],
+                        max(
+                            0,
+                            seconds
+                        )
+                    )
+
+                update_oni_card(
+                    card_no,
+                    target_user["user_id"],
+                    target_user["name"]
+                )
+
+                success_count += 1
+
+            del oni_setup_waiting[
+                user_id
+            ]
+
+            reply = (
+                f"✅ {success_count}件の鬼設定を反映しました"
+            )
 
 
         # ----------------------
@@ -710,6 +808,32 @@ def handle_message(event):
                 )
 
             reply = msg
+
+
+        # ----------------------
+        # 鬼設定
+        # ----------------------
+
+        elif text == "鬼設定":
+
+            if user_id != ADMIN_USER_ID:
+
+                reply = (
+                    "❌ 管理者専用コマンドです"
+                )
+
+            else:
+
+                oni_setup_waiting[user_id] = True
+
+                reply = (
+                    "鬼設定モード\n\n"
+                    "例:\n"
+                    "1 山田\n"
+                    "3 佐藤\n"
+                    "5 央多"
+                )
+
 
         # ----------------------
         # リセット
