@@ -109,6 +109,31 @@ def get_quick_reply():
         ]
     )
 
+def get_admin_quick_reply():
+
+    return QuickReply(
+        items=[
+            QuickReplyButton(
+                action=MessageAction(
+                    label="👹 鬼設定",
+                    text="鬼設定"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="♻ リセット",
+                    text="リセット"
+                )
+            ),
+            QuickReplyButton(
+                action=MessageAction(
+                    label="➕ 全員+20",
+                    text="全員+20"
+                )
+            )
+        ]
+    )
+
 
 # ----------------------
 # トップページ
@@ -685,6 +710,39 @@ def handle_message(event):
                 "参加者一覧\n"
                 f"{users_text}"
             )
+
+
+        # ----------------------
+        # アナル(コンソール)
+        # ----------------------
+
+        elif text == "アナル":
+
+            if user_id != ADMIN_USER_ID:
+
+                reply = (
+                    "❌ このコマンドは使用できません"
+                )
+
+            else:
+
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text=(
+                            "🛠 管理者コンソール\n\n"
+                            "利用可能コマンド\n\n"
+                            "・鬼設定\n"
+                            "・リセット\n"
+                            "・全員+20"
+                        ),
+                        quick_reply=
+                        get_admin_quick_reply()
+                    )
+                )
+
+                return
+
 
         # ----------------------
         # ポイント
