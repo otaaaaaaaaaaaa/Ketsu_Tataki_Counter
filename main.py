@@ -722,7 +722,7 @@ def handle_message(event):
             if user_id != ADMIN_USER_ID:
 
                 reply = (
-                    "❌ このコマンドは使用できません"
+                    "松下穂高"
                 )
 
             else:
