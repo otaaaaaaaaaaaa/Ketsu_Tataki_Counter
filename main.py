@@ -42,7 +42,8 @@ from database import (
     get_user_items,
     use_item,
     get_all_oni_cards,
-    add_points_all
+    add_points_all,
+    reset_all_data
 )
 
 from point_service import (
@@ -921,19 +922,52 @@ def handle_message(event):
 
         elif text == "リセット":
 
-            if user_id == ADMIN_USER_ID:
-
-                reset_all_points()
+            if user_id != ADMIN_USER_ID:
 
                 reply = (
-                    "全ユーザーのポイントをリセットしました"
+                    "❌ 管理者専用コマンドです"
                 )
 
             else:
 
-                reply = (
-                    "管理者専用コマンドです"
-                )
+                try:
+
+                    # 全データを初期化
+                    reset_all_data()
+
+                    # 入力待ち状態も解除
+                    transfer_waiting.clear()
+                    point_waiting.clear()
+                    count_waiting.clear()
+                    oni_card_waiting.clear()
+                    item_waiting.clear()
+                    item_action_waiting.clear()
+                    oni_setup_waiting.clear()
+
+                    reply = (
+                        "✅ 全データをリセットしました\n\n"
+                        "・全員の所持ポイント\n"
+                        "・全員の累計ポイント\n"
+                        "・消費回数\n"
+                        "・鬼回数\n"
+                        "・鬼カード1〜5の登録情報\n"
+                        "・鬼ランキングの履歴\n"
+                        "・全員の所持アイテム\n\n"
+                        "ユーザー登録とショップの商品一覧は維持しています。"
+                    )
+
+                except Exception as e:
+
+                    print(
+                        "リセットエラー:",
+                        repr(e)
+                    )
+
+                    reply = (
+                        "❌ リセットに失敗しました。\n"
+                        "データベースを確認してください。"
+                    )
+
 
         # ----------------------
         # アイテムメニュー
