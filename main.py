@@ -41,7 +41,8 @@ from database import (
     get_item,
     get_user_items,
     use_item,
-    get_all_oni_cards
+    get_all_oni_cards,
+    add_points_all
 )
 
 from point_service import (
@@ -890,6 +891,27 @@ def handle_message(event):
                     "1 山田\n"
                     "3 佐藤\n"
                     "5 央多"
+                )
+
+
+        # ----------------------
+        # 全員+20
+        # ----------------------
+
+        elif text == "全員+20":
+
+            if user_id != ADMIN_USER_ID:
+
+                reply = (
+                    "❌ 管理者専用コマンドです"
+                )
+
+            else:
+
+                add_points_all(20)
+
+                reply = (
+                    "✅ 全員に20pt付与しました"
                 )
 
 
