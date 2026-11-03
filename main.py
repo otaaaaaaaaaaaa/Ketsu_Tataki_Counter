@@ -141,11 +141,9 @@ def get_admin_quick_reply():
 # トップページ
 # ----------------------
 
-@app.get("/")
-def root():
-    return {
-        "status": "running"
-    }
+@app.api_route("/", methods=["GET", "HEAD"])
+async def root():
+    return {"status": "ok"}
 
 
 # ----------------------
