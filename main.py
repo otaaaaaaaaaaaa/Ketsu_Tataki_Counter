@@ -3,14 +3,9 @@ from datetime import datetime
 
 from fastapi import FastAPI, Request
 
-from linebot import (
-    LineBotApi,
-    WebhookHandler
-)
+from linebot import LineBotApi, WebhookHandler
 
-from linebot.exceptions import (
-    InvalidSignatureError
-)
+from linebot.exceptions import InvalidSignatureError
 
 from linebot.models import (
     MessageEvent,
@@ -52,27 +47,19 @@ from point_service import (
 )
 
 
+# ----------------------
+# FastAPI・LINE設定
+# ----------------------
+
 app = FastAPI()
 
-CHANNEL_ACCESS_TOKEN = os.getenv(
-    "CHANNEL_ACCESS_TOKEN"
-)
+CHANNEL_ACCESS_TOKEN = os.getenv("CHANNEL_ACCESS_TOKEN")
+CHANNEL_SECRET = os.getenv("CHANNEL_SECRET")
+ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 
-CHANNEL_SECRET = os.getenv(
-    "CHANNEL_SECRET"
-)
+line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 
-ADMIN_USER_ID = os.getenv(
-    "ADMIN_USER_ID"
-)
-
-line_bot_api = LineBotApi(
-    CHANNEL_ACCESS_TOKEN
-)
-
-handler = WebhookHandler(
-    CHANNEL_SECRET
-)
+handler = WebhookHandler(CHANNEL_SECRET)
 
 
 # ----------------------
@@ -94,7 +81,6 @@ oni_confirm_waiting = {}
 # ----------------------
 
 def get_quick_reply():
-    """よく使うコマンドをボタンで表示する"""
 
     commands = [
         ("＊", "アナル"),
@@ -111,6 +97,7 @@ def get_quick_reply():
             for label, command in commands
         ]
     )
+
 
 def get_admin_quick_reply():
 
@@ -144,7 +131,10 @@ def get_admin_quick_reply():
 
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root():
-    return {"status": "ok"}
+
+    return {
+        "status": "ok"
+    }
 
 
 # ----------------------
@@ -161,32 +151,36 @@ async def callback(request: Request):
     )
 
     if not signature:
+
         return {
             "error": "missing signature"
         }
 
     try:
+
         handler.handle(
             body.decode("utf-8"),
             signature
         )
 
     except InvalidSignatureError:
+
         return {
             "error": "invalid signature"
         }
 
     except Exception as e:
+
         print(
             "callbackエラー:",
-            e
+            repr(e)
         )
 
     return "OK"
 
 
 # ----------------------
-# メッセージ処理
+# メッセージ処理開始
 # ----------------------
 
 @handler.add(
@@ -198,6 +192,7 @@ def handle_message(event):
     try:
 
         user_id = event.source.user_id
+
         text = event.message.text.strip()
 
         user = get_user(user_id)
@@ -219,26 +214,21 @@ def handle_message(event):
 
             user = get_user(user_id)
 
-
         # ----------------------
-        # 鬼引渡しカード
+        # 鬼引渡しカード入力待ち
         # ----------------------
 
         if (
             user_id in item_action_waiting
-            and item_action_waiting[user_id]["type"]
+            and item_action_waiting[user_id].get("type")
             == "oni_transfer"
         ):
 
-            target_user = get_user_by_name(
-                text
-            )
+            target_user = get_user_by_name(text)
 
             if not target_user:
 
-                reply = (
-                    "❌ その名前は存在しません"
-                )
+                reply = "❌ その名前は存在しません"
 
             else:
 
@@ -248,71 +238,71 @@ def handle_message(event):
 
                 for card in cards:
 
-                    if card["current_name"]:
+                    if card.get("current_name"):
 
                         active_card = card
-
                         break
 
                 if not active_card:
 
-                    reply = (
-                        "❌ 現在鬼が登録されていません"
-                    )
+                    reply = "❌ 現在鬼が登録されていません"
 
                 else:
 
-                    start = datetime.fromisoformat(
-                        active_card["start_time"]
-                    )
+                    if not active_card.get("start_time"):
 
-                    now = (
-                        datetime.now(
-                            start.tzinfo
+                        reply = "❌ 鬼の開始時間が登録されていません"
+
+                    else:
+
+                        start = datetime.fromisoformat(
+                            active_card["start_time"]
                         )
-                        if start.tzinfo
-                        else datetime.now()
-                    )
 
-                    seconds = int(
-                        (
-                            now - start
-                        ).total_seconds()
-                    )
-
-                    add_oni_history(
-                        active_card["card_no"],
-                        active_card["current_name"],
-                        max(
-                            0,
-                            seconds
+                        now = (
+                            datetime.now(start.tzinfo)
+                            if start.tzinfo
+                            else datetime.now()
                         )
-                    )
 
-                    update_oni_card(
-                        active_card["card_no"],
-                        target_user["user_id"],
-                        target_user["name"]
-                    )
+                        seconds = int(
+                            (now - start).total_seconds()
+                        )
 
-                    reply = (
-                        f"✅ 鬼を "
-                        f"{target_user['name']}"
-                        " に引き渡しました"
-                    )
+                        add_oni_history(
+                            active_card["card_no"],
+                            active_card["current_name"],
+                            max(0, seconds)
+                        )
 
-                del item_action_waiting[
-                    user_id
-                ]
+                        update_oni_card(
+                            active_card["card_no"],
+                            target_user["user_id"],
+                            target_user["name"]
+                        )
 
+                        reply = (
+                            f"✅ 鬼を {target_user['name']} "
+                            "に引き渡しました"
+                        )
+
+            del item_action_waiting[user_id]
+
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text=reply,
+                    quick_reply=get_quick_reply()
+                )
+            )
+
+            return
 
         # ----------------------
         # 鬼設定入力待ち
         # ----------------------
 
-        if (
-            user_id in oni_setup_waiting
-        ):
+        if user_id in oni_setup_waiting:
 
             lines = text.split("\n")
 
@@ -333,57 +323,42 @@ def handle_message(event):
 
                 card_no = int(card_text)
 
-                if card_no not in [1,2,3,4,5]:
+                if card_no not in [1, 2, 3, 4, 5]:
                     continue
 
-                target_user = (
-                    get_user_by_name(
-                        target_name
-                    )
+                target_user = get_user_by_name(
+                    target_name
                 )
 
                 if not target_user:
                     continue
 
-                # 既存鬼がいたら時間保存
-
-                card = get_oni_card(
-                    card_no
-                )
+                card = get_oni_card(card_no)
 
                 if (
                     card
-                    and card["current_name"]
-                    and card["start_time"]
+                    and card.get("current_name")
+                    and card.get("start_time")
                 ):
 
-                    start = (
-                        datetime.fromisoformat(
-                            card["start_time"]
-                        )
+                    start = datetime.fromisoformat(
+                        card["start_time"]
                     )
 
                     now = (
-                        datetime.now(
-                            start.tzinfo
-                        )
+                        datetime.now(start.tzinfo)
                         if start.tzinfo
                         else datetime.now()
                     )
 
                     seconds = int(
-                        (
-                            now - start
-                        ).total_seconds()
+                        (now - start).total_seconds()
                     )
 
                     add_oni_history(
                         card_no,
                         card["current_name"],
-                        max(
-                            0,
-                            seconds
-                        )
+                        max(0, seconds)
                     )
 
                 update_oni_card(
@@ -394,14 +369,21 @@ def handle_message(event):
 
                 success_count += 1
 
-            del oni_setup_waiting[
-                user_id
-            ]
+            del oni_setup_waiting[user_id]
 
             reply = (
                 f"✅ {success_count}件の鬼設定を反映しました"
             )
 
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text=reply,
+                    quick_reply=get_quick_reply()
+                )
+            )
+
+            return
 
         # ----------------------
         # 譲渡先入力待ち
@@ -413,27 +395,22 @@ def handle_message(event):
             == "select_user"
         ):
 
-            target = text
-
-            target_user = get_user_by_name(
-                target
-            )
+            target_user = get_user_by_name(text)
 
             if not target_user:
 
-                reply = (
-                    "その名前は存在しません"
-                )
+                reply = "その名前は存在しません"
 
             else:
 
                 transfer_waiting[user_id] = {
                     "step": "input_amount",
-                    "target": target
+                    "target": target_user["name"]
                 }
 
                 reply = (
-                    f"{target}へ何ポイント譲渡しますか？\n\n"
+                    f"{target_user['name']}へ"
+                    "何ポイント譲渡しますか？\n\n"
                     "数字だけ入力してください"
                 )
 
@@ -449,17 +426,13 @@ def handle_message(event):
 
             if not text.isdigit():
 
-                reply = (
-                    "数字だけ入力してください"
-                )
+                reply = "数字だけ入力してください"
 
             else:
 
                 amount = int(text)
 
-                target = transfer_waiting[
-                    user_id
-                ]["target"]
+                target = transfer_waiting[user_id]["target"]
 
                 success, result = transfer_points(
                     user_id,
@@ -550,24 +523,20 @@ def handle_message(event):
 
             count = int(text)
 
-            point_type = count_waiting[
-                user_id
-            ]["type"]
+            point_type = count_waiting[user_id]["type"]
 
             if point_type == "ケツ":
+
                 add = count * 1
+
             else:
+
                 add = count * 3
 
             user = get_user(user_id)
 
-            total = (
-                user["total_points"] + add
-            )
-
-            current = (
-                user["current_points"] + add
-            )
+            total = user["total_points"] + add
+            current = user["current_points"] + add
 
             update_user(
                 user_id,
@@ -634,6 +603,10 @@ def handle_message(event):
                 "5"
             )
 
+        # ----------------------
+        # 鬼カード修正
+        # ----------------------
+
         elif (
             user_id in oni_confirm_waiting
             and text == "修正"
@@ -652,6 +625,9 @@ def handle_message(event):
                 "5"
             )
 
+        # ----------------------
+        # 鬼カード番号入力
+        # ----------------------
 
         elif (
             user_id in oni_card_waiting
@@ -665,9 +641,7 @@ def handle_message(event):
             line_bot_api.reply_message(
                 event.reply_token,
                 TextSendMessage(
-                    text=(
-                        f"カード{text}で登録しますか？"
-                    ),
+                    text=f"カード{text}で登録しますか？",
                     quick_reply=QuickReply(
                         items=[
                             QuickReplyButton(
@@ -689,71 +663,62 @@ def handle_message(event):
 
             return
 
-            elif (
-                    user_id in oni_confirm_waiting
-                    and text == "決定"
+        # ----------------------
+        # 鬼カード決定
+        # ----------------------
+
+        elif (
+            user_id in oni_confirm_waiting
+            and text == "決定"
+        ):
+
+            card_no = oni_confirm_waiting[user_id]
+
+            card = get_oni_card(card_no)
+
+            if not card:
+
+                reply = "❌ その鬼カードは存在しません"
+
+            else:
+
+                if (
+                    card.get("current_name")
+                    and card.get("start_time")
                 ):
 
-                    card_no = oni_confirm_waiting[
-                        user_id
-                    ]
+                    start = datetime.fromisoformat(
+                        card["start_time"]
+                    )
 
-                    card = get_oni_card(card_no)
+                    now = (
+                        datetime.now(start.tzinfo)
+                        if start.tzinfo
+                        else datetime.now()
+                    )
 
-                    if not card:
+                    seconds = int(
+                        (now - start).total_seconds()
+                    )
 
-                        reply = (
-                            "❌ その鬼カードは存在しません"
-                        )
+                    add_oni_history(
+                        card_no,
+                        card["current_name"],
+                        max(0, seconds)
+                    )
 
-                    else:
+                update_oni_card(
+                    card_no,
+                    user_id,
+                    user["name"]
+                )
 
-                        if (
-                            card.get("current_name")
-                            and card.get("start_time")
-                        ):
+                reply = (
+                    f"👹 カード{card_no}で鬼登録\n\n"
+                    "タイマー開始"
+                )
 
-                            start = datetime.fromisoformat(
-                                card["start_time"]
-                            )
-
-                            now = (
-                                datetime.now(
-                                    start.tzinfo
-                                )
-                                if start.tzinfo
-                                else datetime.now()
-                            )
-
-                            seconds = int(
-                                (
-                                    now - start
-                                ).total_seconds()
-                            )
-
-                            add_oni_history(
-                                card_no,
-                                card["current_name"],
-                                max(
-                                    0,
-                                    seconds
-                                )
-                            )
-
-                        update_oni_card(
-                            card_no,
-                            user_id,
-                            user["name"]
-                        )
-
-                        reply = (
-                            f"👹 カード{card_no}で鬼登録\n\n"
-                            "タイマー開始"
-                        )
-
-                    del oni_confirm_waiting[
-                        user_id
-                    ]
+            del oni_confirm_waiting[user_id]
 
         # ----------------------
         # 譲渡
@@ -776,18 +741,15 @@ def handle_message(event):
                 f"{users_text}"
             )
 
-
         # ----------------------
-        # アナル(コンソール)
+        # アナル（コンソール）
         # ----------------------
 
         elif text == "アナル":
 
             if user_id != ADMIN_USER_ID:
 
-                reply = (
-                    "松下穂高"
-                )
+                reply = "松下穂高"
 
             else:
 
@@ -801,13 +763,11 @@ def handle_message(event):
                             "・リセット\n"
                             "・全員+20"
                         ),
-                        quick_reply=
-                        get_admin_quick_reply()
+                        quick_reply=get_admin_quick_reply()
                     )
                 )
 
                 return
-
 
         # ----------------------
         # ポイント
@@ -832,9 +792,7 @@ def handle_message(event):
 
         elif text == "消費":
 
-            success, current = consume_point(
-                user_id
-            )
+            success, current = consume_point(user_id)
 
             if success:
 
@@ -859,9 +817,7 @@ def handle_message(event):
             current_ranking = get_current_ranking()
             total_ranking = get_total_ranking()
 
-            current_msg = (
-                "現在ポイントランキング\n\n"
-            )
+            current_msg = "現在ポイントランキング\n\n"
 
             for i, row in enumerate(
                 current_ranking,
@@ -874,9 +830,7 @@ def handle_message(event):
                     f"{row['current_points']}pt\n"
                 )
 
-            total_msg = (
-                "累計ポイントランキング\n\n"
-            )
+            total_msg = "累計ポイントランキング\n\n"
 
             for i, row in enumerate(
                 total_ranking,
@@ -932,7 +886,6 @@ def handle_message(event):
 
             reply = msg
 
-
         # ----------------------
         # 鬼設定
         # ----------------------
@@ -941,9 +894,7 @@ def handle_message(event):
 
             if user_id != ADMIN_USER_ID:
 
-                reply = (
-                    "❌ 管理者専用コマンドです"
-                )
+                reply = "❌ 管理者専用コマンドです"
 
             else:
 
@@ -957,7 +908,6 @@ def handle_message(event):
                     "5 央多"
                 )
 
-
         # ----------------------
         # 全員+20
         # ----------------------
@@ -966,18 +916,13 @@ def handle_message(event):
 
             if user_id != ADMIN_USER_ID:
 
-                reply = (
-                    "❌ 管理者専用コマンドです"
-                )
+                reply = "❌ 管理者専用コマンドです"
 
             else:
 
                 add_points_all(20)
 
-                reply = (
-                    "✅ 全員に20pt付与しました"
-                )
-
+                reply = "✅ 全員に20pt付与しました"
 
         # ----------------------
         # リセット
@@ -988,9 +933,11 @@ def handle_message(event):
             if user_id == ADMIN_USER_ID:
 
                 try:
+
                     reset_all_data()
 
                     # 入力待ち状態も解除
+
                     transfer_waiting.clear()
                     point_waiting.clear()
                     count_waiting.clear()
@@ -998,6 +945,7 @@ def handle_message(event):
                     item_waiting.clear()
                     item_action_waiting.clear()
                     oni_setup_waiting.clear()
+                    oni_confirm_waiting.clear()
 
                     reply = (
                         "🔄 全データをリセットしました！\n\n"
@@ -1011,15 +959,19 @@ def handle_message(event):
                     )
 
                 except Exception as e:
-                    print(f"リセットエラー: {e}")
+
+                    print(
+                        f"リセットエラー: {repr(e)}"
+                    )
+
                     reply = (
                         "❌ リセットに失敗しました。\n"
                         "エラー内容をRenderのログで確認してください。"
                     )
 
             else:
-                reply = "管理者専用コマンドです"
 
+                reply = "管理者専用コマンドです"
 
         # ----------------------
         # アイテムメニュー
@@ -1123,6 +1075,7 @@ def handle_message(event):
             else:
 
                 msg = "所持アイテム\n\n"
+
                 available_items = []
 
                 for owned in owned_items:
@@ -1169,7 +1122,7 @@ def handle_message(event):
                     reply = msg
 
         # ----------------------
-        # アイテム使用
+        # アイテム使用処理
         # ----------------------
 
         elif (
@@ -1217,13 +1170,12 @@ def handle_message(event):
                         )
 
                     # 鬼チェッカー
+
                     elif item_name == "鬼チェッカー":
 
                         cards = get_all_oni_cards()
 
-                        reply = (
-                            "👹 現在の鬼\n\n"
-                        )
+                        reply = "👹 現在の鬼\n\n"
 
                         for card in cards:
 
@@ -1239,11 +1191,10 @@ def handle_message(event):
                             )
 
                     # 鬼引渡しカード
+
                     elif item_name == "鬼引渡しカード":
 
-                        item_action_waiting[
-                            user_id
-                        ] = {
+                        item_action_waiting[user_id] = {
                             "type": "oni_transfer"
                         }
 
@@ -1258,7 +1209,6 @@ def handle_message(event):
                         )
 
                     del item_waiting[user_id]
-
 
         # ----------------------
         # アイテム購入処理
