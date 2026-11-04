@@ -86,6 +86,7 @@ oni_card_waiting = {}
 item_waiting = {}
 item_action_waiting = {}
 oni_setup_waiting = {}
+oni_confirm_waiting = {}
 
 
 # ----------------------
