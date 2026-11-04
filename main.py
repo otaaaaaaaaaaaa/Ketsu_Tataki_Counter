@@ -689,45 +689,71 @@ def handle_message(event):
 
             return
 
-            else:
-
-                if (
-                    card.get("current_name")
-                    and card.get("start_time")
+            elif (
+                    user_id in oni_confirm_waiting
+                    and text == "決定"
                 ):
 
-                    start = datetime.fromisoformat(
-                        card["start_time"]
-                    )
+                    card_no = oni_confirm_waiting[
+                        user_id
+                    ]
 
-                    now = (
-                        datetime.now(start.tzinfo)
-                        if start.tzinfo
-                        else datetime.now()
-                    )
+                    card = get_oni_card(card_no)
 
-                    seconds = int(
-                        (now - start).total_seconds()
-                    )
+                    if not card:
 
-                    add_oni_history(
-                        card_no,
-                        card["current_name"],
-                        max(0, seconds)
-                    )
+                        reply = (
+                            "❌ その鬼カードは存在しません"
+                        )
 
-                update_oni_card(
-                    card_no,
-                    user_id,
-                    user["name"]
-                )
+                    else:
 
-                del oni_card_waiting[user_id]
+                        if (
+                            card.get("current_name")
+                            and card.get("start_time")
+                        ):
 
-                reply = (
-                    f"カード{card_no}で鬼登録しました\n\n"
-                    "タイマー開始"
-                )
+                            start = datetime.fromisoformat(
+                                card["start_time"]
+                            )
+
+                            now = (
+                                datetime.now(
+                                    start.tzinfo
+                                )
+                                if start.tzinfo
+                                else datetime.now()
+                            )
+
+                            seconds = int(
+                                (
+                                    now - start
+                                ).total_seconds()
+                            )
+
+                            add_oni_history(
+                                card_no,
+                                card["current_name"],
+                                max(
+                                    0,
+                                    seconds
+                                )
+                            )
+
+                        update_oni_card(
+                            card_no,
+                            user_id,
+                            user["name"]
+                        )
+
+                        reply = (
+                            f"👹 カード{card_no}で鬼登録\n\n"
+                            "タイマー開始"
+                        )
+
+                    del oni_confirm_waiting[
+                        user_id
+                    ]
 
         # ----------------------
         # 譲渡
