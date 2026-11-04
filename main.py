@@ -635,21 +635,59 @@ def handle_message(event):
             )
 
         elif (
+            user_id in oni_confirm_waiting
+            and text == "修正"
+        ):
+
+            del oni_confirm_waiting[user_id]
+
+            oni_card_waiting[user_id] = True
+
+            reply = (
+                "👹 鬼カード番号を入力してください\n\n"
+                "1\n"
+                "2\n"
+                "3\n"
+                "4\n"
+                "5"
+            )
+
+
+        elif (
             user_id in oni_card_waiting
             and text in ["1", "2", "3", "4", "5"]
         ):
 
-            card_no = int(text)
+            oni_confirm_waiting[user_id] = int(text)
 
-            card = get_oni_card(card_no)
+            del oni_card_waiting[user_id]
 
-            if not card:
-
-                reply = (
-                    "その鬼カードは存在しません"
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text=(
+                        f"カード{text}で登録しますか？"
+                    ),
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(
+                                    label="✅ 決定",
+                                    text="決定"
+                                )
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(
+                                    label="🔄 修正",
+                                    text="修正"
+                                )
+                            )
+                        ]
+                    )
                 )
+            )
 
-                del oni_card_waiting[user_id]
+            return
 
             else:
 
