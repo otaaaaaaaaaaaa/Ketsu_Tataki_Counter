@@ -555,6 +555,7 @@ def create_room(owner_user_id):
     return get_room(room_id)
 
 
+
 def join_room(user_id, room_id):
     room_id = _room_id(room_id)
 
@@ -577,29 +578,38 @@ def join_room(user_id, room_id):
         if current_room_id != room_id:
             return False
 
+    # ルームの参加者を確認
     member_ids = get_room_member_ids(room_id)
 
+    # まだ参加していなければ追加
     if user_id not in member_ids:
         supabase.table("room_members").insert({
             "room_id": room_id,
             "user_id": user_id
         }).execute()
 
+    # 現在の所属ルームを更新
     supabase.table("users").update({
         "active_room_id": room_id
-    }).eq("user_id", user_id).execute()
+    }).eq(
+        "user_id", user_id
+    ).execute()
 
-    # 参加者のルーム別ポイントを初期化
-    supabase.table("room_user_stats").upsert({
-        "room_id": room_id,
-        "user_id": user_id,
-        "total_points": 0,
-        "current_points": 0,
-        "used_count": 0,
-        "oni_count": 0
-    }, on_conflict="room_id,user_id").execute()
+    # 参加者のルーム別ポイントを初回だけ初期化
+    existing_stats = get_room_user_stats(room_id, user_id)
+
+    if not existing_stats:
+        supabase.table("room_user_stats").insert({
+            "room_id": room_id,
+            "user_id": user_id,
+            "total_points": 0,
+            "current_points": 0,
+            "used_count": 0,
+            "oni_count": 0
+        }).execute()
 
     return True
+
 
 
 def leave_room(user_id):
