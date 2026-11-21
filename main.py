@@ -42,6 +42,8 @@ from database import (
     # ルーム管理
     DEFAULT_ROOM_ID,
     get_user_active_room,
+    get_user_rooms,
+    set_active_room,
     get_room,
     create_room,
     join_room,
@@ -292,7 +294,6 @@ def format_duration(seconds):
     remaining_seconds = seconds % 60
 
     if hours:
-
         return (
             f"{hours}時間"
             f"{minutes}分"
@@ -300,7 +301,6 @@ def format_duration(seconds):
         )
 
     if minutes:
-
         return (
             f"{minutes}分"
             f"{remaining_seconds}秒"
@@ -339,7 +339,6 @@ def add_points_for_user(user_id, amount):
     match = get_active_match(room_id)
 
     if match:
-
         return add_match_points(
             room_id,
             user_id,
@@ -369,7 +368,6 @@ def consume_points_for_user(user_id, amount):
     match = get_active_match(room_id)
 
     if match:
-
         return consume_match_points(
             room_id,
             user_id,
@@ -459,6 +457,7 @@ def get_room_quick_reply():
     """ルーム設定メニュー"""
 
     commands = [
+        ("ルーム切替", "ルーム切替"),
         ("ルーム作成", "ルーム作成"),
         ("参加", "参加"),
         ("ルーム情報", "ルーム情報"),
@@ -476,6 +475,43 @@ def get_room_quick_reply():
             for label, command in commands
         ]
     )
+
+
+def get_room_switch_quick_reply(user_id):
+    """所属ルームを切り替えるボタン"""
+
+    rooms = get_user_rooms(user_id) or []
+
+    items = []
+
+    current_room_id = get_current_room_id(user_id)
+
+    # LINE Quick Replyは最大13個
+    # ルーム選択ボタンは最大12個にする
+    for room in rooms[:12]:
+
+        room_id = room.get("room_id")
+
+        if room_id is None:
+            continue
+
+        room_id = int(room_id)
+
+        if str(room_id) == str(current_room_id):
+            label = f"✓ {room_id}"
+        else:
+            label = f"選択 {room_id}"
+
+        items.append(
+            QuickReplyButton(
+                action=MessageAction(
+                    label=label,
+                    text=f"ルーム選択 {room_id}"
+                )
+            )
+        )
+
+    return QuickReply(items=items) if items else None
 
 
 # ========================================
@@ -506,7 +542,6 @@ def make_room_info(room_id):
         members,
         start=1
     ):
-
         message += (
             f"{index}. "
             f"{member.get('name', '不明')}\n"
@@ -518,6 +553,55 @@ def make_room_info(room_id):
         message += "\n⚔️ 試合中"
     else:
         message += "\n⏸ 試合待機中"
+
+    return message
+
+
+def make_room_switch_message(user_id):
+    """所属ルーム一覧と現在の選択状態を表示"""
+
+    rooms = get_user_rooms(user_id) or []
+    current_room_id = get_current_room_id(user_id)
+
+    if not rooms:
+        return (
+            "🏠 所属ルームがありません。\n\n"
+            "「ルーム作成」または「参加」からルームを用意してください。"
+        )
+
+    message = (
+        "🔄 ルーム切替\n\n"
+        f"現在の操作対象: {current_room_id or '未選択'}\n\n"
+        "切り替えたいルームを選択してください。\n\n"
+        "【所属ルーム】\n"
+    )
+
+    for index, room in enumerate(rooms, start=1):
+
+        room_id = room.get("room_id")
+
+        if room_id is None:
+            continue
+
+        mark = " ← 現在選択中" if str(room_id) == str(current_room_id) else ""
+
+        room_name = room.get("name") or room.get("room_name")
+
+        if room_name:
+            message += (
+                f"{index}. {room_name}\n"
+                f"   ID: {room_id}{mark}\n"
+            )
+        else:
+            message += (
+                f"{index}. ルームID: {room_id}{mark}\n"
+            )
+
+    if len(rooms) > 12:
+        message += (
+            "\nボタンに表示されないルームは、"
+            "「ルーム選択 ルームID」と入力してください。"
+        )
 
     return message
 
@@ -574,7 +658,6 @@ def make_match_result_message(result):
     message += "━━━━━━━━━━━━\n"
 
     if mvp:
-
         message += (
             "🌟 MVP\n"
             f"{mvp.get('name', '不明')} "
@@ -585,7 +668,6 @@ def make_match_result_message(result):
     most_item_count = result.get("most_item_count", 0)
 
     if most_item_user:
-
         message += (
             "🎁 最多アイテム使用\n"
             f"{most_item_user} "
@@ -598,6 +680,7 @@ def make_match_result_message(result):
     )
 
     return message
+
 
 # ========================================
 # FastAPI
@@ -630,7 +713,6 @@ async def callback(request: Request):
         logger.exception("LINE webhook処理エラー")
 
     return "OK"
-
 
 # ========================================
 # LINEメッセージ処理
@@ -673,6 +755,85 @@ def handle_message(event):
         room_id = get_current_room_id(user_id)
 
         # ========================================
+        # ルーム切替
+        # ========================================
+
+        if text == "ルーム切替":
+
+            rooms = get_user_rooms(user_id) or []
+
+            if not rooms:
+                reply_text(
+                    event,
+                    (
+                        "所属しているルームがありません。\n\n"
+                        "「ルーム作成」または「参加」からルームに参加してください。"
+                    ),
+                    get_room_quick_reply()
+                )
+                return
+
+            reply_text(
+                event,
+                make_room_switch_message(user_id),
+                get_room_switch_quick_reply(user_id)
+            )
+            return
+
+        # ========================================
+        # ルーム選択
+        # ========================================
+
+        if text.startswith("ルーム選択"):
+
+            parts = text.split()
+
+            if len(parts) != 2 or not parts[1].isdigit():
+                reply_text(
+                    event,
+                    "❌ ルームIDを確認できません。\n「ルーム切替」から選び直してください。"
+                )
+                return
+
+            target_room_id = int(parts[1])
+
+            if str(target_room_id) == str(room_id):
+                reply_text(
+                    event,
+                    f"このルームはすでに選択中です。\nルームID: {target_room_id}",
+                    get_room_quick_reply()
+                )
+                return
+
+            success = set_active_room(
+                user_id,
+                target_room_id
+            )
+
+            if not success:
+                reply_text(
+                    event,
+                    (
+                        "❌ ルームを切り替えられませんでした。\n\n"
+                        "そのルームに参加しているか確認してください。"
+                    ),
+                    get_room_quick_reply()
+                )
+                return
+
+            reply_text(
+                event,
+                (
+                    "✅ 操作対象のルームを切り替えました！\n\n"
+                    f"現在のルームID: {target_room_id}\n\n"
+                    "これ以降のポイント・ランキング・アイテムなどは、"
+                    "このルームのデータが使用されます。"
+                ),
+                get_room_quick_reply()
+            )
+            return
+
+        # ========================================
         # ルーム作成
         # ========================================
 
@@ -681,21 +842,17 @@ def handle_message(event):
             room = create_room(user_id)
 
             if not room:
-                reply_text(event, "❌ ルームを作成できませんでした。")
+                reply_text(
+                    event,
+                    "❌ ルームを作成できませんでした。"
+                )
                 return
 
             new_room_id = int(room["room_id"])
 
-            # 作成者を新しいルームへ参加させる
-            if not join_room(user_id, new_room_id):
-                delete_room(new_room_id)
-
-                reply_text(
-                    event,
-                    "❌ 新しいルームへの参加に失敗しました。\n"
-                    "別のルームに参加中でないか確認してください。"
-                )
-                return
+            # create_room() が作成者を参加済みにし、
+            # active_room_idも更新する想定。
+            # ここでjoin_room()を重ねて呼び出さない。
 
             reply_text(
                 event,
@@ -720,7 +877,11 @@ def handle_message(event):
 
             reply_text(
                 event,
-                "参加したいルームのIDを入力してください。\n\n数字だけ送信してください。"
+                (
+                    "参加したいルームのIDを入力してください。\n\n"
+                    "数字だけ送信してください。\n"
+                    "キャンセルする場合は「キャンセル」と送信してください。"
+                )
             )
             return
 
@@ -730,8 +891,17 @@ def handle_message(event):
 
         if user_id in room_join_waiting:
 
+            if text == "キャンセル":
+                del room_join_waiting[user_id]
+                reply_text(event, "ルーム参加をキャンセルしました。")
+                return
+
             if not text.isdigit():
-                reply_text(event, "❌ ルームIDは数字で入力してください。")
+                reply_text(
+                    event,
+                    "❌ ルームIDは数字で入力してください。\n"
+                    "キャンセルする場合は「キャンセル」と送信してください。"
+                )
                 return
 
             target_room_id = int(text)
@@ -750,7 +920,8 @@ def handle_message(event):
                     (
                         "✅ ルームに参加しました！\n\n"
                         f"ルームID: {target_room_id}\n"
-                        f"参加者: {user['name']}"
+                        f"参加者: {user['name']}\n\n"
+                        "このルームが現在の操作対象になりました。"
                     ),
                     get_room_quick_reply()
                 )
@@ -766,7 +937,7 @@ def handle_message(event):
                     event,
                     (
                         "❌ ルームに参加できませんでした。\n\n"
-                        "ルームID・ルームの状態・現在の所属ルームを確認してください。"
+                        "ルームIDやルームの状態を確認してください。"
                     )
                 )
 
@@ -781,7 +952,11 @@ def handle_message(event):
             room_id = get_current_room_id(user_id)
 
             if not room_id:
-                reply_text(event, "現在参加しているルームがありません。")
+                reply_text(
+                    event,
+                    "現在選択中のルームがありません。",
+                    get_room_quick_reply()
+                )
                 return
 
             reply_text(
@@ -800,14 +975,19 @@ def handle_message(event):
             room_id = get_current_room_id(user_id)
 
             if not room_id:
-                reply_text(event, "現在ルームに参加していません。")
+                reply_text(
+                    event,
+                    "現在選択中のルームがありません。"
+                )
                 return
 
             if is_room_owner(user_id, room_id):
                 reply_text(
                     event,
-                    "❌ ルーム管理者はそのまま退出できません。\n"
-                    "管理者として「解散」を実行してください。"
+                    (
+                        "❌ ルーム管理者はそのまま退出できません。\n"
+                        "管理者として「解散」を実行してください。"
+                    )
                 )
                 return
 
@@ -815,7 +995,15 @@ def handle_message(event):
 
             if success:
 
-                reply_text(event, "ルームから退出しました。")
+                reply_text(
+                    event,
+                    (
+                        "ルームから退出しました。\n\n"
+                        "ほかに所属しているルームがある場合は、"
+                        "そちらへ切り替えてください。"
+                    ),
+                    get_room_quick_reply()
+                )
 
                 push_room_text(
                     room_id,
@@ -843,7 +1031,10 @@ def handle_message(event):
                 return
 
             if not is_room_owner(user_id, room_id):
-                reply_text(event, "❌ 試合を開始できるのはルーム管理者だけです。")
+                reply_text(
+                    event,
+                    "❌ 試合を開始できるのはルーム管理者だけです。"
+                )
                 return
 
             match = start_match(room_id)
@@ -885,7 +1076,10 @@ def handle_message(event):
                 return
 
             if not is_room_owner(user_id, room_id):
-                reply_text(event, "❌ 試合を終了できるのはルーム管理者だけです。")
+                reply_text(
+                    event,
+                    "❌ 試合を終了できるのはルーム管理者だけです。"
+                )
                 return
 
             if not get_active_match(room_id):
@@ -927,7 +1121,10 @@ def handle_message(event):
                 return
 
             if not is_room_owner(user_id, room_id):
-                reply_text(event, "❌ 再試合を開始できるのはルーム管理者だけです。")
+                reply_text(
+                    event,
+                    "❌ 再試合を開始できるのはルーム管理者だけです。"
+                )
                 return
 
             if get_active_match(room_id):
@@ -963,7 +1160,10 @@ def handle_message(event):
                 return
 
             if not is_room_owner(user_id, room_id):
-                reply_text(event, "❌ ルームを解散できるのは管理者だけです。")
+                reply_text(
+                    event,
+                    "❌ ルームを解散できるのは管理者だけです。"
+                )
                 return
 
             if get_active_match(room_id):
@@ -986,9 +1186,16 @@ def handle_message(event):
             success = delete_room(room_id)
 
             if success:
-                reply_text(event, "✅ ルームを解散しました。")
+                reply_text(
+                    event,
+                    "✅ ルームを解散しました。",
+                    get_room_quick_reply()
+                )
             else:
-                reply_text(event, "❌ ルームの解散に失敗しました。")
+                reply_text(
+                    event,
+                    "❌ ルームの解散に失敗しました。"
+                )
 
             return
 
@@ -1006,7 +1213,10 @@ def handle_message(event):
             target_user = get_member_by_name(room_id, text)
 
             if not target_user:
-                reply_text(event, "❌ その名前の参加者は現在のルームにいません。")
+                reply_text(
+                    event,
+                    "❌ その名前の参加者は現在のルームにいません。"
+                )
                 return
 
             cards = get_all_room_oni_cards(room_id)
@@ -1022,7 +1232,9 @@ def handle_message(event):
                 reply_text(event, "❌ 現在鬼が登録されていません。")
                 return
 
-            seconds = elapsed_seconds(active_card.get("start_time"))
+            seconds = elapsed_seconds(
+                active_card.get("start_time")
+            )
 
             add_room_oni_history(
                 room_id,
@@ -1059,7 +1271,10 @@ def handle_message(event):
 
             if not is_room_owner(user_id, room_id):
                 del oni_setup_waiting[user_id]
-                reply_text(event, "❌ ルーム管理者だけが鬼設定を変更できます。")
+                reply_text(
+                    event,
+                    "❌ ルーム管理者だけが鬼設定を変更できます。"
+                )
                 return
 
             success_count = 0
@@ -1081,19 +1296,27 @@ def handle_message(event):
                 if card_no not in [1, 2, 3, 4, 5]:
                     continue
 
-                target_user = get_member_by_name(room_id, target_name)
+                target_user = get_member_by_name(
+                    room_id,
+                    target_name
+                )
 
                 if not target_user:
                     continue
 
-                card = get_room_oni_card(room_id, card_no)
+                card = get_room_oni_card(
+                    room_id,
+                    card_no
+                )
 
                 if not card:
                     continue
 
                 if card.get("current_name") and card.get("start_time"):
 
-                    seconds = elapsed_seconds(card["start_time"])
+                    seconds = elapsed_seconds(
+                        card["start_time"]
+                    )
 
                     add_room_oni_history(
                         room_id,
@@ -1128,15 +1351,24 @@ def handle_message(event):
             and transfer_waiting[user_id]["step"] == "select_user"
         ):
 
-            target_user = get_member_by_name(room_id, text)
+            room_id = get_current_room_id(user_id)
+
+            target_user = get_member_by_name(
+                room_id,
+                text
+            )
 
             if not target_user:
-                reply_text(event, "❌ その名前の参加者は現在のルームにいません。")
+                reply_text(
+                    event,
+                    "❌ その名前の参加者は現在のルームにいません。"
+                )
                 return
 
             transfer_waiting[user_id] = {
                 "step": "input_amount",
-                "target": target_user["name"]
+                "target": target_user["name"],
+                "target_user_id": target_user["user_id"]
             }
 
             reply_text(
@@ -1167,20 +1399,45 @@ def handle_message(event):
                 reply_text(event, "1以上の数字を入力してください。")
                 return
 
-            target = transfer_waiting[user_id]["target"]
+            target_user_id = transfer_waiting[user_id].get(
+                "target_user_id"
+            )
+
+            target_name = transfer_waiting[user_id]["target"]
+
+            # 譲渡先も同じルームを操作対象にしている必要がある
+            target_room_id = get_user_active_room(target_user_id)
+            current_room_id = get_current_room_id(user_id)
+
+            if str(target_room_id) != str(current_room_id):
+                del transfer_waiting[user_id]
+                reply_text(
+                    event,
+                    (
+                        "❌ 譲渡できませんでした。\n\n"
+                        "相手が別のルームを選択している可能性があります。"
+                    )
+                )
+                return
 
             success, result = transfer_points(
                 user_id,
-                target,
+                target_user_id,
                 amount
             )
 
             del transfer_waiting[user_id]
 
             if success:
-                reply_text(event, f"✅ {target} に {amount}pt譲渡しました。")
+                reply_text(
+                    event,
+                    f"✅ {target_name} に {amount}pt譲渡しました。"
+                )
             else:
-                reply_text(event, f"❌ 譲渡に失敗しました: {result}")
+                reply_text(
+                    event,
+                    f"❌ 譲渡に失敗しました: {result}"
+                )
 
             return
 
@@ -1206,10 +1463,19 @@ def handle_message(event):
 
         if text == "設定":
 
+            room_id = get_current_room_id(user_id)
+
+            current_room_text = (
+                str(room_id)
+                if room_id
+                else "未選択"
+            )
+
             reply_text(
                 event,
                 (
                     "⚙️ ルーム設定\n\n"
+                    f"現在の操作対象ルーム: {current_room_text}\n\n"
                     "操作を選択してください。"
                 ),
                 get_room_quick_reply()
@@ -1231,13 +1497,22 @@ def handle_message(event):
                     quick_reply=QuickReply(
                         items=[
                             QuickReplyButton(
-                                action=MessageAction(label="🍑 ケツ", text="ケツ")
+                                action=MessageAction(
+                                    label="🍑 ケツ",
+                                    text="ケツ"
+                                )
                             ),
                             QuickReplyButton(
-                                action=MessageAction(label="🌭 珍棒", text="珍棒")
+                                action=MessageAction(
+                                    label="🌭 珍棒",
+                                    text="珍棒"
+                                )
                             ),
                             QuickReplyButton(
-                                action=MessageAction(label="🩲 ノーパン", text="ノーパン")
+                                action=MessageAction(
+                                    label="🩲 ノーパン",
+                                    text="ノーパン"
+                                )
                             )
                         ]
                     )
@@ -1251,7 +1526,10 @@ def handle_message(event):
 
         if user_id in point_waiting and text in ["ケツ", "珍棒"]:
 
-            count_waiting[user_id] = {"type": text}
+            count_waiting[user_id] = {
+                "type": text
+            }
+
             del point_waiting[user_id]
 
             reply_text(
@@ -1265,17 +1543,30 @@ def handle_message(event):
             count = int(text)
 
             if count <= 0:
-                reply_text(event, "1以上の数字を入力してください。")
+                reply_text(
+                    event,
+                    "1以上の数字を入力してください。"
+                )
                 return
 
             point_type = count_waiting[user_id]["type"]
 
-            amount = count if point_type == "ケツ" else count * 3
+            amount = (
+                count
+                if point_type == "ケツ"
+                else count * 3
+            )
 
-            success = add_points_for_user(user_id, amount)
+            success = add_points_for_user(
+                user_id,
+                amount
+            )
 
             if not success:
-                reply_text(event, "❌ ポイントを加算できませんでした。")
+                reply_text(
+                    event,
+                    "❌ ポイントを加算できませんでした。"
+                )
                 return
 
             del count_waiting[user_id]
@@ -1302,10 +1593,16 @@ def handle_message(event):
 
             amount = 20
 
-            success = add_points_for_user(user_id, amount)
+            success = add_points_for_user(
+                user_id,
+                amount
+            )
 
             if not success:
-                reply_text(event, "❌ ポイントを加算できませんでした。")
+                reply_text(
+                    event,
+                    "❌ ポイントを加算できませんでした。"
+                )
                 return
 
             del point_waiting[user_id]
@@ -1336,9 +1633,14 @@ def handle_message(event):
             )
             return
 
+        # ========================================
+        # 鬼カード修正
+        # ========================================
+
         if user_id in oni_confirm_waiting and text == "修正":
 
             del oni_confirm_waiting[user_id]
+
             oni_card_waiting[user_id] = True
 
             reply_text(
@@ -1347,9 +1649,17 @@ def handle_message(event):
             )
             return
 
-        if user_id in oni_card_waiting and text in ["1", "2", "3", "4", "5"]:
+        # ========================================
+        # 鬼カード番号入力
+        # ========================================
+
+        if (
+            user_id in oni_card_waiting
+            and text in ["1", "2", "3", "4", "5"]
+        ):
 
             oni_confirm_waiting[user_id] = int(text)
+
             del oni_card_waiting[user_id]
 
             line_bot_api.reply_message(
@@ -1359,10 +1669,16 @@ def handle_message(event):
                     quick_reply=QuickReply(
                         items=[
                             QuickReplyButton(
-                                action=MessageAction(label="✅ 決定", text="決定")
+                                action=MessageAction(
+                                    label="✅ 決定",
+                                    text="決定"
+                                )
                             ),
                             QuickReplyButton(
-                                action=MessageAction(label="🔄 修正", text="修正")
+                                action=MessageAction(
+                                    label="🔄 修正",
+                                    text="修正"
+                                )
                             )
                         ]
                     )
@@ -1370,21 +1686,41 @@ def handle_message(event):
             )
             return
 
+        # ========================================
+        # 鬼カード登録確定
+        # ========================================
+
         if user_id in oni_confirm_waiting and text == "決定":
 
             room_id = get_current_room_id(user_id)
             card_no = oni_confirm_waiting[user_id]
 
-            card = get_room_oni_card(room_id, card_no)
+            if not room_id:
+                del oni_confirm_waiting[user_id]
+                reply_text(
+                    event,
+                    "❌ ルームが選択されていません。"
+                )
+                return
+
+            card = get_room_oni_card(
+                room_id,
+                card_no
+            )
 
             if not card:
                 del oni_confirm_waiting[user_id]
-                reply_text(event, "❌ その鬼カードは存在しません。")
+                reply_text(
+                    event,
+                    "❌ その鬼カードは存在しません。"
+                )
                 return
 
             if card.get("current_name") and card.get("start_time"):
 
-                seconds = elapsed_seconds(card["start_time"])
+                seconds = elapsed_seconds(
+                    card["start_time"]
+                )
 
                 add_room_oni_history(
                     room_id,
@@ -1401,20 +1737,28 @@ def handle_message(event):
             )
 
             # ルーム別鬼回数を更新
-            stats = get_room_user_stats(room_id, user_id)
+            stats = get_room_user_stats(
+                room_id,
+                user_id
+            )
 
             if stats:
                 update_room_user_stats(
                     room_id,
                     user_id,
-                    oni_count=int(stats.get("oni_count", 0)) + 1
+                    oni_count=int(
+                        stats.get("oni_count", 0)
+                    ) + 1
                 )
 
             del oni_confirm_waiting[user_id]
 
             reply_text(
                 event,
-                f"👹 カード{card_no}で鬼登録しました。\n\nタイマー開始！"
+                (
+                    f"👹 カード{card_no}で鬼登録しました。\n\n"
+                    "タイマー開始！"
+                )
             )
             return
 
@@ -1424,9 +1768,20 @@ def handle_message(event):
 
         if text == "譲渡":
 
+            room_id = get_current_room_id(user_id)
+
+            if not room_id:
+                reply_text(
+                    event,
+                    "ルームに参加していません。"
+                )
+                return
+
             names = get_name_list(room_id)
 
-            transfer_waiting[user_id] = {"step": "select_user"}
+            transfer_waiting[user_id] = {
+                "step": "select_user"
+            }
 
             reply_text(
                 event,
@@ -1473,7 +1828,10 @@ def handle_message(event):
             stats = get_current_stats(user_id)
 
             if not stats:
-                reply_text(event, "ポイント情報を取得できませんでした。")
+                reply_text(
+                    event,
+                    "ポイント情報を取得できませんでした。"
+                )
                 return
 
             reply_text(
@@ -1497,15 +1855,25 @@ def handle_message(event):
 
             amount = 50
 
-            success = consume_points_for_user(user_id, amount)
+            success = consume_points_for_user(
+                user_id,
+                amount
+            )
 
             stats = get_current_stats(user_id)
-            current = int(stats.get("current_points", 0)) if stats else 0
+
+            current = (
+                int(stats.get("current_points", 0))
+                if stats else 0
+            )
 
             if success:
                 reply_text(
                     event,
-                    f"✅ 50ポイント消費しました。\n\n残り: {current}pt"
+                    (
+                        "✅ 50ポイント消費しました。\n\n"
+                        f"残り: {current}pt"
+                    )
                 )
             else:
                 reply_text(
@@ -1528,14 +1896,22 @@ def handle_message(event):
             room_id = get_current_room_id(user_id)
 
             if not room_id:
-                reply_text(event, "ルームに参加していません。")
+                reply_text(
+                    event,
+                    "ルームに参加していません。"
+                )
                 return
 
             ranking = get_room_ranking(room_id)
 
-            current_message = "💰 現在ポイントランキング\n\n"
+            current_message = (
+                "💰 現在ポイントランキング\n\n"
+            )
 
-            for index, row in enumerate(ranking, start=1):
+            for index, row in enumerate(
+                ranking,
+                start=1
+            ):
                 current_message += (
                     f"{index}位 {row['name']} "
                     f"{row['current_points']}pt\n"
@@ -1553,7 +1929,9 @@ def handle_message(event):
                 if stats:
                     total_rows.append({
                         "name": member["name"],
-                        "total_points": int(stats.get("total_points", 0))
+                        "total_points": int(
+                            stats.get("total_points", 0)
+                        )
                     })
 
             total_rows.sort(
@@ -1561,9 +1939,14 @@ def handle_message(event):
                 reverse=True
             )
 
-            total_message = "\n🏆 累計ポイントランキング\n\n"
+            total_message = (
+                "\n🏆 累計ポイントランキング\n\n"
+            )
 
-            for index, row in enumerate(total_rows, start=1):
+            for index, row in enumerate(
+                total_rows,
+                start=1
+            ):
                 total_message += (
                     f"{index}位 {row['name']} "
                     f"{row['total_points']}pt\n"
@@ -1572,7 +1955,9 @@ def handle_message(event):
             line_bot_api.reply_message(
                 event.reply_token,
                 [
-                    TextSendMessage(text=current_message),
+                    TextSendMessage(
+                        text=current_message
+                    ),
                     TextSendMessage(
                         text=total_message,
                         quick_reply=get_quick_reply()
@@ -1590,14 +1975,20 @@ def handle_message(event):
             room_id = get_current_room_id(user_id)
 
             if not room_id:
-                reply_text(event, "ルームに参加していません。")
+                reply_text(
+                    event,
+                    "ルームに参加していません。"
+                )
                 return
 
             ranking = get_room_oni_ranking(room_id)
 
             message = "👹 鬼ランキング\n\n"
 
-            for index, row in enumerate(ranking, start=1):
+            for index, row in enumerate(
+                ranking,
+                start=1
+            ):
 
                 name = row["name"]
                 seconds = int(row["seconds"])
@@ -1622,7 +2013,10 @@ def handle_message(event):
             room_id = get_current_room_id(user_id)
 
             if not is_room_owner(user_id, room_id):
-                reply_text(event, "❌ 鬼設定を変更できるのはルーム管理者だけです。")
+                reply_text(
+                    event,
+                    "❌ 鬼設定を変更できるのはルーム管理者だけです。"
+                )
                 return
 
             oni_setup_waiting[user_id] = True
@@ -1647,20 +2041,30 @@ def handle_message(event):
         if text == "全員+20":
 
             if not is_admin(user_id):
-                reply_text(event, "❌ 管理者専用コマンドです。")
+                reply_text(
+                    event,
+                    "❌ 管理者専用コマンドです。"
+                )
                 return
 
             room_id = get_current_room_id(user_id)
 
             if not room_id:
-                reply_text(event, "ルームに参加していません。")
+                reply_text(
+                    event,
+                    "ルームに参加していません。"
+                )
                 return
 
             members = get_room_members(room_id)
             success_count = 0
 
             for member in members:
-                if add_points_for_user(member["user_id"], 20):
+
+                if add_points_for_user(
+                    member["user_id"],
+                    20
+                ):
                     success_count += 1
 
             reply_text(
@@ -1676,7 +2080,10 @@ def handle_message(event):
         if text == "リセット":
 
             if not is_admin(user_id):
-                reply_text(event, "❌ 管理者専用コマンドです。")
+                reply_text(
+                    event,
+                    "❌ 管理者専用コマンドです。"
+                )
                 return
 
             try:
@@ -1707,10 +2114,16 @@ def handle_message(event):
                 )
 
             except Exception:
-                logger.exception("リセット処理に失敗しました")
+                logger.exception(
+                    "リセット処理に失敗しました"
+                )
+
                 reply_text(
                     event,
-                    "❌ リセットに失敗しました。Renderのログを確認してください。"
+                    (
+                        "❌ リセットに失敗しました。\n"
+                        "Renderのログを確認してください。"
+                    )
                 )
 
             return
@@ -1721,7 +2134,9 @@ def handle_message(event):
 
         if text == "アイテム":
 
-            item_waiting[user_id] = {"step": "menu"}
+            item_waiting[user_id] = {
+                "step": "menu"
+            }
 
             line_bot_api.reply_message(
                 event.reply_token,
@@ -1733,10 +2148,16 @@ def handle_message(event):
                     quick_reply=QuickReply(
                         items=[
                             QuickReplyButton(
-                                action=MessageAction(label="🛒 購入", text="購入")
+                                action=MessageAction(
+                                    label="🛒 購入",
+                                    text="購入"
+                                )
                             ),
                             QuickReplyButton(
-                                action=MessageAction(label="🎁 使用", text="使用")
+                                action=MessageAction(
+                                    label="🎁 使用",
+                                    text="使用"
+                                )
                             )
                         ]
                     )
@@ -1755,11 +2176,23 @@ def handle_message(event):
         ):
 
             room_id = get_current_room_id(user_id)
+
+            if not room_id:
+                del item_waiting[user_id]
+                reply_text(
+                    event,
+                    "ルームに参加していません。"
+                )
+                return
+
             items = get_room_items(room_id)
 
             if not items:
                 del item_waiting[user_id]
-                reply_text(event, "現在、販売中のアイテムはありません。")
+                reply_text(
+                    event,
+                    "現在、販売中のアイテムはありません。"
+                )
                 return
 
             message = "🛒 アイテムショップ\n\n"
@@ -1777,9 +2210,13 @@ def handle_message(event):
                 if description:
                     message += f"  {description}\n"
 
-            message += "\n購入したいアイテムの番号を入力してください。"
+            message += (
+                "\n購入したいアイテムの番号を入力してください。"
+            )
 
-            item_waiting[user_id] = {"step": "buy"}
+            item_waiting[user_id] = {
+                "step": "buy"
+            }
 
             reply_text(event, message)
             return
@@ -1796,22 +2233,34 @@ def handle_message(event):
 
             room_id = get_current_room_id(user_id)
 
+            if not room_id:
+                del item_waiting[user_id]
+                reply_text(
+                    event,
+                    "ルームに参加していません。"
+                )
+                return
+
             owned_items = get_room_user_items(
                 room_id,
                 user_id
             )
 
             available_items = []
+
             message = "🎁 所持アイテム\n\n"
 
             for item in owned_items:
 
-                quantity = int(item.get("quantity", 0))
+                quantity = int(
+                    item.get("quantity", 0)
+                )
 
                 if quantity <= 0:
                     continue
 
                 item_id = int(item["item_id"])
+
                 available_items.append(item_id)
 
                 message += (
@@ -1822,10 +2271,15 @@ def handle_message(event):
 
             if not available_items:
                 del item_waiting[user_id]
-                reply_text(event, "使用できるアイテムを持っていません。")
+                reply_text(
+                    event,
+                    "使用できるアイテムを持っていません。"
+                )
                 return
 
-            message += "\n使用するアイテムの番号を入力してください。"
+            message += (
+                "\n使用するアイテムの番号を入力してください。"
+            )
 
             item_waiting[user_id] = {
                 "step": "use",
@@ -1848,11 +2302,17 @@ def handle_message(event):
             room_id = get_current_room_id(user_id)
             item_id = int(text)
 
-            item = get_room_item(room_id, item_id)
+            item = get_room_item(
+                room_id,
+                item_id
+            )
 
             if not item:
                 del item_waiting[user_id]
-                reply_text(event, "❌ そのアイテムは存在しません。")
+                reply_text(
+                    event,
+                    "❌ そのアイテムは存在しません。"
+                )
                 return
 
             if not get_active_match(room_id):
@@ -1893,7 +2353,6 @@ def handle_message(event):
                 )
 
             else:
-
                 reply_text(
                     event,
                     (
@@ -1923,14 +2382,23 @@ def handle_message(event):
             )
 
             if item_id not in available_items:
-                reply_text(event, "❌ 所持アイテムの番号を入力してください。")
+                reply_text(
+                    event,
+                    "❌ 所持アイテムの番号を入力してください。"
+                )
                 return
 
-            item = get_room_item(room_id, item_id)
+            item = get_room_item(
+                room_id,
+                item_id
+            )
 
             if not item:
                 del item_waiting[user_id]
-                reply_text(event, "❌ アイテムが見つかりません。")
+                reply_text(
+                    event,
+                    "❌ アイテムが見つかりません。"
+                )
                 return
 
             item_name = item["item_name"]
@@ -1965,7 +2433,10 @@ def handle_message(event):
 
                 for card in cards:
 
-                    name = card.get("current_name") or "なし"
+                    name = (
+                        card.get("current_name")
+                        or "なし"
+                    )
 
                     message += (
                         f"カード{card['card_no']} : "
