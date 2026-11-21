@@ -63,6 +63,29 @@ def _safe_int(value):
         return 0
 
 
+def _is_valid_amount(amount):
+    return (
+        isinstance(amount, int)
+        and not isinstance(amount, bool)
+        and amount > 0
+    )
+
+
+def _is_room_member(room_id, user_id):
+    room_id = _room_id(room_id)
+
+    if room_id is None:
+        return False
+
+    return bool(
+        _get_one(
+            "room_members",
+            room_id=room_id,
+            user_id=user_id
+        )
+    )
+
+
 def _get_active_room_id(user_id):
     user = get_user(user_id)
 
@@ -71,14 +94,6 @@ def _get_active_room_id(user_id):
 
     return _room_id(
         user.get("active_room_id")
-    )
-
-
-def _is_valid_amount(amount):
-    return (
-        isinstance(amount, int)
-        and not isinstance(amount, bool)
-        and amount > 0
     )
 
 
@@ -193,15 +208,17 @@ def reset_all_points():
     )
 
     for user in result.data or []:
-        supabase.table("users").update({
-            "total_points": 0,
-            "current_points": 0,
-            "used_count": 0,
-            "oni_count": 0
-        }).eq(
-            "user_id",
-            user["user_id"]
-        ).execute()
+        (
+            supabase.table("users")
+            .update({
+                "total_points": 0,
+                "current_points": 0,
+                "used_count": 0,
+                "oni_count": 0
+            })
+            .eq("user_id", user["user_id"])
+            .execute()
+        )
 
     return True
 
@@ -248,7 +265,6 @@ def get_user_active_room(user_id):
     """
     現在操作対象として選択されているルームIDを返す。
     """
-
     return _get_active_room_id(user_id)
 
 
@@ -320,7 +336,6 @@ def get_user_rooms(user_id):
     ユーザーが所属している全ルームを返す。
     現在選択中のルームには selected=True を付ける。
     """
-
     result = (
         supabase.table("room_members")
         .select("room_id,joined_at")
@@ -360,7 +375,6 @@ def set_active_room(user_id, room_id):
     所属しているルームの中から操作対象を切り替える。
     所属していないルームは選択できない。
     """
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -507,7 +521,6 @@ def join_room(user_id, room_id):
     既に別のルームに所属していても参加できる。
     参加したルームを操作対象に切り替える。
     """
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -522,14 +535,12 @@ def join_room(user_id, room_id):
     if not room.get("is_active", True):
         return False
 
-    # 既に所属しているか確認
     membership = _get_one(
         "room_members",
         room_id=room_id,
         user_id=user_id
     )
 
-    # 未所属なら新しく参加
     if not membership:
         result = (
             supabase.table("room_members")
@@ -543,7 +554,6 @@ def join_room(user_id, room_id):
         if not result.data:
             return False
 
-    # ポイント情報がなければ初期化
     existing_stats = get_room_user_stats(
         room_id,
         user_id
@@ -559,7 +569,6 @@ def join_room(user_id, room_id):
             "oni_count": 0
         }, on_conflict="room_id,user_id").execute()
 
-    # 参加したルームを操作対象にする
     return set_active_room(
         user_id,
         room_id
@@ -575,7 +584,6 @@ def leave_room(user_id, room_id=None):
     指定したルーム、または現在選択中のルームから退出する。
     ほかのルームへの所属は維持する。
     """
-
     user = get_user(user_id)
 
     if not user:
@@ -614,14 +622,12 @@ def leave_room(user_id, room_id=None):
     if not membership:
         return False
 
-    # 対象ルームからだけ退出
     supabase.table("room_members").delete().eq(
         "room_id", room_id
     ).eq(
         "user_id", user_id
     ).execute()
 
-    # 選択中のルームから退出した場合だけ切り替える
     active_room_id = _get_active_room_id(user_id)
 
     if active_room_id == room_id:
@@ -829,6 +835,10 @@ def transfer_points(
 
     # ルーム内の名前から相手を検索
     if sender_room is not None:
+        # 送信者がそのルームに所属しているか確認
+        if not _is_room_member(sender_room, sender_id):
+            return False, "ルームに所属していません"
+
         for member in get_room_members(sender_room):
             if member.get("name") == receiver_name:
                 receiver = get_user(member["user_id"])
@@ -841,18 +851,18 @@ def transfer_points(
     if not receiver:
         return False, "相手が見つかりません"
 
-    if str(sender_id) == str(receiver["user_id"]):
+    receiver_id = receiver["user_id"]
+
+    if str(sender_id) == str(receiver_id):
         return False, "自分自身には譲渡できません"
-
-    receiver_room = _room_id(
-        receiver.get("active_room_id")
-    )
-
-    if sender_room != receiver_room:
-        return False, "同じルームの相手にのみ譲渡できます"
 
     # ルーム内での譲渡
     if sender_room is not None:
+        # 相手も同じルームに所属しているか確認
+        # 相手の active_room_id は判定に使用しない
+        if not _is_room_member(sender_room, receiver_id):
+            return False, "同じルームの相手にのみ譲渡できます"
+
         sender_stats = get_room_user_stats(
             sender_room,
             sender_id
@@ -860,7 +870,7 @@ def transfer_points(
 
         receiver_stats = get_room_user_stats(
             sender_room,
-            receiver["user_id"]
+            receiver_id
         )
 
         if not sender_stats or not receiver_stats:
@@ -870,9 +880,14 @@ def transfer_points(
             sender_stats.get("current_points")
         )
 
+        receiver_current = _safe_int(
+            receiver_stats.get("current_points")
+        )
+
         if sender_current < amount:
             return False, "ポイントが不足しています"
 
+        # 送信者のポイントを減らす
         sender_result = update_room_user_stats(
             sender_room,
             sender_id,
@@ -882,17 +897,28 @@ def transfer_points(
         if not sender_result:
             return False, "送信者のポイント更新に失敗しました"
 
-        receiver_result = update_room_user_stats(
-            sender_room,
-            receiver["user_id"],
-            current_points=(
-                _safe_int(receiver_stats.get("current_points"))
-                + amount
+        # 受信者のポイントを増やす
+        try:
+            receiver_result = update_room_user_stats(
+                sender_room,
+                receiver_id,
+                current_points=receiver_current + amount
             )
-        )
+        except Exception:
+            receiver_result = None
 
+        # 受信者側の更新に失敗した場合は送信者側を戻す
         if not receiver_result:
-            return False, "受信者のポイント更新に失敗しました"
+            try:
+                update_room_user_stats(
+                    sender_room,
+                    sender_id,
+                    current_points=sender_current
+                )
+            except Exception:
+                pass
+
+            return False, "受信者のポイント更新に失敗しました。送信者のポイントを戻しました"
 
         return True, receiver
 
@@ -901,9 +927,14 @@ def transfer_points(
         sender.get("current_points")
     )
 
+    receiver_current = _safe_int(
+        receiver.get("current_points")
+    )
+
     if sender_current < amount:
         return False, "ポイントが不足しています"
 
+    # 送信者のポイントを減らす
     sender_result = update_user(
         sender_id,
         _safe_int(sender.get("total_points")),
@@ -914,15 +945,30 @@ def transfer_points(
     if not sender_result:
         return False, "送信者のポイント更新に失敗しました"
 
-    receiver_result = update_user(
-        receiver["user_id"],
-        _safe_int(receiver.get("total_points")),
-        _safe_int(receiver.get("current_points")) + amount,
-        _safe_int(receiver.get("used_count"))
-    )
+    # 受信者のポイントを増やす
+    try:
+        receiver_result = update_user(
+            receiver_id,
+            _safe_int(receiver.get("total_points")),
+            receiver_current + amount,
+            _safe_int(receiver.get("used_count"))
+        )
+    except Exception:
+        receiver_result = False
 
+    # 受信者側の更新に失敗した場合は送信者側を戻す
     if not receiver_result:
-        return False, "受信者のポイント更新に失敗しました"
+        try:
+            update_user(
+                sender_id,
+                _safe_int(sender.get("total_points")),
+                sender_current,
+                _safe_int(sender.get("used_count"))
+            )
+        except Exception:
+            pass
+
+        return False, "受信者のポイント更新に失敗しました。送信者のポイントを戻しました"
 
     return True, receiver
 
@@ -1324,6 +1370,7 @@ def start_match(room_id):
         return None
 
     # 試合作成
+    # 過去の試合は削除せず、新しい試合レコードを作成する
     match_result = (
         supabase.table("matches")
         .insert({
@@ -1382,6 +1429,7 @@ def start_match(room_id):
 
     return match
 
+
 # =====================================
 # 試合中のポイント獲得
 # =====================================
@@ -1419,18 +1467,20 @@ def add_match_points(
     if not room_stats:
         return False
 
+    old_current = _safe_int(
+        room_stats.get("current_points")
+    )
+
+    old_total = _safe_int(
+        room_stats.get("total_points")
+    )
+
     # ルームの所持ポイント・累計ポイントを更新
     room_result = update_room_user_stats(
         room_id,
         user_id,
-        current_points=(
-            _safe_int(room_stats.get("current_points"))
-            + amount
-        ),
-        total_points=(
-            _safe_int(room_stats.get("total_points"))
-            + amount
-        )
+        current_points=old_current + amount,
+        total_points=old_total + amount
     )
 
     if not room_result:
@@ -1447,17 +1497,34 @@ def add_match_points(
         + amount
     )
 
-    result = (
-        supabase.table("match_player_stats")
-        .update({
-            "earned_points": new_earned,
-            "match_points": new_match_points
-        })
-        .eq("id", player_stats["id"])
-        .execute()
-    )
+    try:
+        result = (
+            supabase.table("match_player_stats")
+            .update({
+                "earned_points": new_earned,
+                "match_points": new_match_points
+            })
+            .eq("id", player_stats["id"])
+            .execute()
+        )
+    except Exception:
+        result = None
 
-    return bool(result.data)
+    if not result or not result.data:
+        # 試合成績の更新に失敗した場合、ルームポイントを戻す
+        try:
+            update_room_user_stats(
+                room_id,
+                user_id,
+                current_points=old_current,
+                total_points=old_total
+            )
+        except Exception:
+            pass
+
+        return False
+
+    return True
 
 
 # =====================================
@@ -1504,14 +1571,16 @@ def consume_match_points(
     if current_points < amount:
         return False
 
+    old_used_count = _safe_int(
+        room_stats.get("used_count")
+    )
+
     # 所持ポイントを更新
     room_result = update_room_user_stats(
         room_id,
         user_id,
         current_points=current_points - amount,
-        used_count=(
-            _safe_int(room_stats.get("used_count")) + 1
-        )
+        used_count=old_used_count + 1
     )
 
     if not room_result:
@@ -1523,17 +1592,33 @@ def consume_match_points(
         + amount
     )
 
-    result = (
-        supabase.table("match_player_stats")
-        .update({
-            "spent_points": new_spent
-        })
-        .eq("id", player_stats["id"])
-        .execute()
-    )
+    try:
+        result = (
+            supabase.table("match_player_stats")
+            .update({
+                "spent_points": new_spent
+            })
+            .eq("id", player_stats["id"])
+            .execute()
+        )
+    except Exception:
+        result = None
 
-    return bool(result.data)
+    if not result or not result.data:
+        # 試合成績の更新に失敗した場合、所持ポイントを戻す
+        try:
+            update_room_user_stats(
+                room_id,
+                user_id,
+                current_points=current_points,
+                used_count=old_used_count
+            )
+        except Exception:
+            pass
 
+        return False
+
+    return True
 
 # =====================================
 # 試合中のアイテム使用記録
@@ -1593,7 +1678,15 @@ def add_match_item_usage(
         .execute()
     )
 
-    return bool(usage_result.data)
+    if not usage_result.data:
+        # 使用回数更新に失敗した場合は履歴を取り消す
+        supabase.table("match_item_usage").delete().eq(
+            "id", result.data[0]["id"]
+        ).execute()
+
+        return False
+
+    return True
 
 
 # =====================================
@@ -1862,16 +1955,7 @@ def buy_room_item(
     if price < 0:
         return False
 
-    # ポイント消費
-    if price > 0:
-        if not consume_match_points(
-            room_id,
-            user_id,
-            price
-        ):
-            return False
-
-    # 所持数を確認
+    # 所持数を先に確認
     existing = (
         supabase.table("user_items")
         .select("*")
@@ -1882,39 +1966,100 @@ def buy_room_item(
         .execute()
     )
 
-    if existing.data:
-        row = existing.data[0]
+    # ポイント消費
+    if price > 0:
+        if not consume_match_points(
+            room_id,
+            user_id,
+            price
+        ):
+            return False
 
-        update_result = (
-            supabase.table("user_items")
-            .update({
-                "quantity": (
-                    _safe_int(row.get("quantity")) + 1
+    try:
+        if existing.data:
+            row = existing.data[0]
+
+            update_result = (
+                supabase.table("user_items")
+                .update({
+                    "quantity": (
+                        _safe_int(row.get("quantity")) + 1
+                    )
+                })
+                .eq("id", row["id"])
+                .execute()
+            )
+
+            if not update_result.data:
+                raise RuntimeError(
+                    "アイテム所持数の更新に失敗しました"
                 )
-            })
-            .eq("id", row["id"])
-            .execute()
-        )
 
-        if not update_result.data:
-            return False
+        else:
+            insert_result = (
+                supabase.table("user_items")
+                .insert({
+                    "room_id": room_id,
+                    "user_id": user_id,
+                    "item_id": int(item_id),
+                    "quantity": 1
+                })
+                .execute()
+            )
 
-    else:
-        insert_result = (
-            supabase.table("user_items")
-            .insert({
-                "room_id": room_id,
-                "user_id": user_id,
-                "item_id": int(item_id),
-                "quantity": 1
-            })
-            .execute()
-        )
+            if not insert_result.data:
+                raise RuntimeError(
+                    "アイテムの登録に失敗しました"
+                )
 
-        if not insert_result.data:
-            return False
+    except Exception:
+        # アイテム登録に失敗した場合はポイントを戻す
+        if price > 0:
+            try:
+                room_stats = get_room_user_stats(
+                    room_id,
+                    user_id
+                )
+
+                if room_stats:
+                    player_stats = get_match_player_stats(
+                        match["id"],
+                        user_id
+                    )
+
+                    update_room_user_stats(
+                        room_id,
+                        user_id,
+                        current_points=(
+                            _safe_int(room_stats.get("current_points"))
+                            + price
+                        ),
+                        used_count=max(
+                            0,
+                            _safe_int(room_stats.get("used_count")) - 1
+                        )
+                    )
+
+                    if player_stats:
+                        supabase.table("match_player_stats").update({
+                            "spent_points": max(
+                                0,
+                                _safe_int(
+                                    player_stats.get("spent_points")
+                                ) - price
+                            )
+                        }).eq(
+                            "id",
+                            player_stats["id"]
+                        ).execute()
+
+            except Exception:
+                pass
+
+        return False
 
     return True
+
 
 # =====================================
 # ルーム別アイテム使用
@@ -1986,7 +2131,44 @@ def use_room_item(
         .execute()
     )
 
-    return bool(update_result.data)
+    if not update_result.data:
+        # 所持数の更新に失敗した場合は使用履歴を取り消す
+        latest_usage = (
+            supabase.table("match_item_usage")
+            .select("id")
+            .eq("match_id", match["id"])
+            .eq("user_id", user_id)
+            .eq("item_id", int(item_id))
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if latest_usage.data:
+            supabase.table("match_item_usage").delete().eq(
+                "id",
+                latest_usage.data[0]["id"]
+            ).execute()
+
+        player_stats = get_match_player_stats(
+            match["id"],
+            user_id
+        )
+
+        if player_stats:
+            supabase.table("match_player_stats").update({
+                "item_count": max(
+                    0,
+                    _safe_int(player_stats.get("item_count")) - 1
+                )
+            }).eq(
+                "id",
+                player_stats["id"]
+            ).execute()
+
+        return False
+
+    return True
 
 
 # =====================================
@@ -2060,35 +2242,61 @@ def buy_item(user_id, item_id):
     if not update_result.data:
         return False
 
-    # 所持アイテムを確認
-    existing = (
-        supabase.table("user_items")
-        .select("*")
-        .is_("room_id", "null")
-        .eq("user_id", user_id)
-        .eq("item_id", int(item_id))
-        .limit(1)
-        .execute()
-    )
+    try:
+        # 所持アイテムを確認
+        existing = (
+            supabase.table("user_items")
+            .select("*")
+            .is_("room_id", "null")
+            .eq("user_id", user_id)
+            .eq("item_id", int(item_id))
+            .limit(1)
+            .execute()
+        )
 
-    if existing.data:
-        row = existing.data[0]
+        if existing.data:
+            row = existing.data[0]
 
-        supabase.table("user_items").update({
-            "quantity": (
-                _safe_int(row.get("quantity")) + 1
+            item_result = (
+                supabase.table("user_items")
+                .update({
+                    "quantity": (
+                        _safe_int(row.get("quantity")) + 1
+                    )
+                })
+                .eq("id", row["id"])
+                .execute()
             )
-        }).eq(
-            "id",
-            row["id"]
-        ).execute()
 
-    else:
-        supabase.table("user_items").insert({
-            "user_id": user_id,
-            "item_id": int(item_id),
-            "quantity": 1
-        }).execute()
+        else:
+            item_result = (
+                supabase.table("user_items")
+                .insert({
+                    "user_id": user_id,
+                    "item_id": int(item_id),
+                    "quantity": 1
+                })
+                .execute()
+            )
+
+        if not item_result.data:
+            raise RuntimeError(
+                "アイテム登録に失敗しました"
+            )
+
+    except Exception:
+        # アイテム登録に失敗した場合はポイントを戻す
+        try:
+            update_user(
+                user_id,
+                _safe_int(user.get("total_points")),
+                current,
+                _safe_int(user.get("used_count"))
+            )
+        except Exception:
+            pass
+
+        return False
 
     return True
 
@@ -2138,10 +2346,15 @@ def use_item(user_id, item_id):
 
 
 # =====================================
-# 再試合
+# 再試合準備
 # =====================================
 
 def reset_room_for_rematch(room_id):
+    """
+    過去の試合記録は削除しない。
+    ポイント・アイテム・鬼カードも維持する。
+    次の start_match() が新しい試合記録を作成する。
+    """
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -2155,9 +2368,6 @@ def reset_room_for_rematch(room_id):
     # 試合中なら再試合準備は禁止
     if get_active_match(room_id):
         return False
-
-    # ポイント・アイテム・鬼カードは維持
-    # start_match() で新しい試合記録を作る
 
     return True
 
