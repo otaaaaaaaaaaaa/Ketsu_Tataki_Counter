@@ -1,4 +1,3 @@
-
 import os
 import logging
 from datetime import datetime
@@ -433,7 +432,31 @@ def get_admin_quick_reply():
     )
 
 
+def get_info_quick_reply():
+    """情報メニュー"""
+
+    commands = [
+        ("ポイント", "ポイント"),
+        ("消費", "消費"),
+        ("ランキング", "ランキング"),
+        ("鬼ランキング", "鬼ランキング"),
+    ]
+
+    return QuickReply(
+        items=[
+            QuickReplyButton(
+                action=MessageAction(
+                    label=label,
+                    text=command
+                )
+            )
+            for label, command in commands
+        ]
+    )
+
+
 def get_room_quick_reply():
+    """ルーム設定メニュー"""
 
     commands = [
         ("ルーム作成", "ルーム作成"),
@@ -575,7 +598,6 @@ def make_match_result_message(result):
     )
 
     return message
-
 
 # ========================================
 # FastAPI
@@ -1163,6 +1185,38 @@ def handle_message(event):
             return
 
         # ========================================
+        # 情報メニュー
+        # ========================================
+
+        if text == "情報":
+
+            reply_text(
+                event,
+                (
+                    "📊 情報メニュー\n\n"
+                    "確認したい項目を選択してください。"
+                ),
+                get_info_quick_reply()
+            )
+            return
+
+        # ========================================
+        # 設定メニュー
+        # ========================================
+
+        if text == "設定":
+
+            reply_text(
+                event,
+                (
+                    "⚙️ ルーム設定\n\n"
+                    "操作を選択してください。"
+                ),
+                get_room_quick_reply()
+            )
+            return
+
+        # ========================================
         # ケツポ
         # ========================================
 
@@ -1384,7 +1438,6 @@ def handle_message(event):
                 )
             )
             return
-
 
         # ========================================
         # アナル（管理者コンソール）
@@ -1782,7 +1835,6 @@ def handle_message(event):
             reply_text(event, message)
             return
 
-
         # ========================================
         # アイテム購入処理
         # ========================================
@@ -1960,7 +2012,7 @@ def handle_message(event):
             event,
             (
                 "ケツ叩きカウンター\n\n"
-                "下のボタンからコマンドを選んでください。"
+                "下のリッチメニューから操作を選んでください。"
             ),
             get_quick_reply()
         )
