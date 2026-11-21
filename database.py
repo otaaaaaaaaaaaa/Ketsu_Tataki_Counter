@@ -1,4 +1,3 @@
-
 import os
 import random
 from datetime import datetime, timezone
@@ -176,7 +175,6 @@ def add_points_all(amount):
     )
 
     for user in result.data or []:
-
         update_user(
             user["user_id"],
             _safe_int(user.get("total_points")) + amount,
@@ -188,7 +186,6 @@ def add_points_all(amount):
 
 
 def reset_all_points():
-
     result = (
         supabase.table("users")
         .select("user_id")
@@ -196,7 +193,6 @@ def reset_all_points():
     )
 
     for user in result.data or []:
-
         supabase.table("users").update({
             "total_points": 0,
             "current_points": 0,
@@ -215,7 +211,6 @@ def reset_all_points():
 # =====================================
 
 def get_total_ranking():
-
     result = (
         supabase.table("users")
         .select("name,total_points")
@@ -231,7 +226,6 @@ def get_total_ranking():
 
 
 def get_current_ranking():
-
     result = (
         supabase.table("users")
         .select("name,current_points")
@@ -252,17 +246,13 @@ def get_current_ranking():
 
 def get_user_active_room(user_id):
     """
-    現在の所属ルームIDを返す。
-
-    main.py と point_service.py では
-    ルームIDとして利用する。
+    現在操作対象として選択されているルームIDを返す。
     """
 
     return _get_active_room_id(user_id)
 
 
 def get_room_by_id(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -279,7 +269,6 @@ def get_room(room_id):
 
 
 def get_room_members(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -296,7 +285,6 @@ def get_room_members(room_id):
     members = []
 
     for row in result.data or []:
-
         user_data = row.get("users") or {}
 
         members.append({
@@ -309,7 +297,6 @@ def get_room_members(room_id):
 
 
 def get_room_member_ids(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -328,12 +315,93 @@ def get_room_member_ids(room_id):
     ]
 
 
+def get_user_rooms(user_id):
+    """
+    ユーザーが所属している全ルームを返す。
+    現在選択中のルームには selected=True を付ける。
+    """
+
+    result = (
+        supabase.table("room_members")
+        .select("room_id,joined_at")
+        .eq("user_id", user_id)
+        .order("joined_at")
+        .execute()
+    )
+
+    active_room_id = _get_active_room_id(user_id)
+
+    rooms = []
+
+    for row in result.data or []:
+        room_id = _room_id(row.get("room_id"))
+
+        if room_id is None:
+            continue
+
+        room = get_room(room_id)
+
+        if not room:
+            continue
+
+        rooms.append({
+            "room_id": room_id,
+            "owner_user_id": room.get("owner_user_id"),
+            "is_active": room.get("is_active", True),
+            "joined_at": row.get("joined_at"),
+            "selected": room_id == active_room_id
+        })
+
+    return rooms
+
+
+def set_active_room(user_id, room_id):
+    """
+    所属しているルームの中から操作対象を切り替える。
+    所属していないルームは選択できない。
+    """
+
+    room_id = _room_id(room_id)
+
+    if room_id is None:
+        return False
+
+    user = get_user(user_id)
+
+    if not user:
+        return False
+
+    room = get_room(room_id)
+
+    if not room or not room.get("is_active", True):
+        return False
+
+    membership = _get_one(
+        "room_members",
+        room_id=room_id,
+        user_id=user_id
+    )
+
+    if not membership:
+        return False
+
+    result = (
+        supabase.table("users")
+        .update({
+            "active_room_id": room_id
+        })
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    return bool(result.data)
+
+
 # =====================================
 # ルーム作成
 # =====================================
 
 def create_room(owner_user_id):
-
     user = get_user(owner_user_id)
 
     if not user:
@@ -343,7 +411,6 @@ def create_room(owner_user_id):
 
     # 8桁のルームIDを生成
     for _ in range(30):
-
         candidate = random.randint(
             10000000,
             99999999
@@ -378,7 +445,7 @@ def create_room(owner_user_id):
         "user_id": owner_user_id
     }).execute()
 
-    # 所属ルームを変更
+    # 作成したルームを操作対象にする
     supabase.table("users").update({
         "active_room_id": room_id
     }).eq(
@@ -404,7 +471,6 @@ def create_room(owner_user_id):
     )
 
     for item in items_result.data or []:
-
         supabase.table("room_items").upsert({
             "room_id": room_id,
             "item_id": item["item_id"],
@@ -421,7 +487,6 @@ def create_room(owner_user_id):
     )
 
     for card in cards_result.data or []:
-
         supabase.table("room_oni_cards").upsert({
             "room_id": room_id,
             "card_no": card["card_no"],
@@ -438,6 +503,10 @@ def create_room(owner_user_id):
 # =====================================
 
 def join_room(user_id, room_id):
+    """
+    既に別のルームに所属していても参加できる。
+    参加したルームを操作対象に切り替える。
+    """
 
     room_id = _room_id(room_id)
 
@@ -453,61 +522,69 @@ def join_room(user_id, room_id):
     if not room.get("is_active", True):
         return False
 
-    current_room_id = _get_active_room_id(user_id)
+    # 既に所属しているか確認
+    membership = _get_one(
+        "room_members",
+        room_id=room_id,
+        user_id=user_id
+    )
 
-    # 別の通常ルームからの移動は禁止
-    if (
-        current_room_id is not None
-        and current_room_id != DEFAULT_ROOM_ID
-        and current_room_id != room_id
-    ):
-        return False
+    # 未所属なら新しく参加
+    if not membership:
+        result = (
+            supabase.table("room_members")
+            .insert({
+                "room_id": room_id,
+                "user_id": user_id
+            })
+            .execute()
+        )
 
-    # 既に参加しているか確認
-    member_ids = get_room_member_ids(room_id)
+        if not result.data:
+            return False
 
-    if user_id not in member_ids:
-
-        supabase.table("room_members").insert({
-            "room_id": room_id,
-            "user_id": user_id
-        }).execute()
-
-    # 所属ルーム更新
-    supabase.table("users").update({
-        "active_room_id": room_id
-    }).eq(
-        "user_id",
-        user_id
-    ).execute()
-
-    # ポイント情報は初回だけ作成
+    # ポイント情報がなければ初期化
     existing_stats = get_room_user_stats(
         room_id,
         user_id
     )
 
     if not existing_stats:
-
-        supabase.table("room_user_stats").insert({
+        supabase.table("room_user_stats").upsert({
             "room_id": room_id,
             "user_id": user_id,
             "total_points": 0,
             "current_points": 0,
             "used_count": 0,
             "oni_count": 0
-        }).execute()
+        }, on_conflict="room_id,user_id").execute()
 
-    return True
+    # 参加したルームを操作対象にする
+    return set_active_room(
+        user_id,
+        room_id
+    )
 
 
 # =====================================
 # ルーム退出
 # =====================================
 
-def leave_room(user_id):
+def leave_room(user_id, room_id=None):
+    """
+    指定したルーム、または現在選択中のルームから退出する。
+    ほかのルームへの所属は維持する。
+    """
 
-    room_id = _get_active_room_id(user_id)
+    user = get_user(user_id)
+
+    if not user:
+        return False
+
+    if room_id is None:
+        room_id = _get_active_room_id(user_id)
+
+    room_id = _room_id(room_id)
 
     if room_id is None:
         return False
@@ -520,7 +597,7 @@ def leave_room(user_id):
     if not room:
         return False
 
-    # 管理者は退出不可
+    # ルーム管理者は退出不可
     if str(room.get("owner_user_id")) == str(user_id):
         return False
 
@@ -528,17 +605,48 @@ def leave_room(user_id):
     if get_active_match(room_id):
         return False
 
+    membership = _get_one(
+        "room_members",
+        room_id=room_id,
+        user_id=user_id
+    )
+
+    if not membership:
+        return False
+
+    # 対象ルームからだけ退出
     supabase.table("room_members").delete().eq(
         "room_id", room_id
     ).eq(
         "user_id", user_id
     ).execute()
 
-    supabase.table("users").update({
-        "active_room_id": DEFAULT_ROOM_ID
-    }).eq(
-        "user_id", user_id
-    ).execute()
+    # 選択中のルームから退出した場合だけ切り替える
+    active_room_id = _get_active_room_id(user_id)
+
+    if active_room_id == room_id:
+        remaining_rooms = get_user_rooms(user_id)
+
+        if remaining_rooms:
+            next_room_id = remaining_rooms[0]["room_id"]
+        else:
+            default_membership = _get_one(
+                "room_members",
+                room_id=DEFAULT_ROOM_ID,
+                user_id=user_id
+            )
+
+            next_room_id = (
+                DEFAULT_ROOM_ID
+                if default_membership
+                else None
+            )
+
+        supabase.table("users").update({
+            "active_room_id": next_room_id
+        }).eq(
+            "user_id", user_id
+        ).execute()
 
     return True
 
@@ -548,7 +656,6 @@ def leave_room(user_id):
 # =====================================
 
 def get_room_user_stats(room_id, user_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -562,7 +669,6 @@ def get_room_user_stats(room_id, user_id):
 
 
 def get_room_user(room_id, user_id):
-
     return get_room_user_stats(
         room_id,
         user_id
@@ -574,7 +680,6 @@ def update_room_user_stats(
     user_id,
     **values
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -602,7 +707,6 @@ def update_room_user_stats(
 
 
 def add_room_points(room_id, user_id, amount):
-
     if not _is_valid_amount(amount):
         return False
 
@@ -629,7 +733,6 @@ def add_room_points(room_id, user_id, amount):
 
 
 def consume_room_points(room_id, user_id, amount):
-
     if not _is_valid_amount(amount):
         return False
 
@@ -661,7 +764,6 @@ def consume_room_points(room_id, user_id, amount):
 
 
 def get_room_ranking(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -681,7 +783,6 @@ def get_room_ranking(room_id):
     ranking = []
 
     for row in result.data or []:
-
         user_data = row.get("users") or {}
 
         ranking.append({
@@ -703,7 +804,6 @@ def get_room_ranking(room_id):
 
     return ranking
 
-
 # =====================================
 # ポイント譲渡
 # =====================================
@@ -713,7 +813,6 @@ def transfer_points(
     receiver_name,
     amount
 ):
-
     if not _is_valid_amount(amount):
         return False, "1以上の数字を入力してください"
 
@@ -730,9 +829,7 @@ def transfer_points(
 
     # ルーム内の名前から相手を検索
     if sender_room is not None:
-
         for member in get_room_members(sender_room):
-
             if member.get("name") == receiver_name:
                 receiver = get_user(member["user_id"])
                 break
@@ -756,7 +853,6 @@ def transfer_points(
 
     # ルーム内での譲渡
     if sender_room is not None:
-
         sender_stats = get_room_user_stats(
             sender_room,
             sender_id
@@ -836,11 +932,9 @@ def transfer_points(
 # =====================================
 
 def add_oni_count(user_id):
-
     room_id = _get_active_room_id(user_id)
 
     if room_id is not None:
-
         stats = get_room_user_stats(
             room_id,
             user_id
@@ -887,7 +981,6 @@ def add_oni_count(user_id):
 # =====================================
 
 def get_items():
-
     result = (
         supabase.table("items")
         .select("*")
@@ -899,7 +992,6 @@ def get_items():
 
 
 def get_item(item_id):
-
     return _get_one(
         "items",
         item_id=int(item_id)
@@ -911,7 +1003,6 @@ def get_item(item_id):
 # =====================================
 
 def get_all_oni_cards():
-
     result = (
         supabase.table("oni_cards")
         .select("*")
@@ -923,7 +1014,6 @@ def get_all_oni_cards():
 
 
 def get_oni_card(card_no):
-
     return _get_one(
         "oni_cards",
         card_no=int(card_no)
@@ -936,9 +1026,7 @@ def update_oni_card(
     current_name=None,
     start_time=_UNSET
 ):
-
     if start_time is _UNSET:
-
         if current_user_id or current_name:
             start_time = _now()
         else:
@@ -963,7 +1051,6 @@ def add_oni_history(
     user_name,
     seconds
 ):
-
     result = (
         supabase.table("oni_history")
         .insert({
@@ -979,7 +1066,6 @@ def add_oni_history(
 
 
 def get_oni_ranking():
-
     result = (
         supabase.table("oni_history")
         .select("user_name,seconds")
@@ -990,7 +1076,6 @@ def get_oni_ranking():
     totals = {}
 
     for row in result.data or []:
-
         name = row.get("user_name", "不明")
 
         totals[name] = (
@@ -1019,7 +1104,6 @@ def get_oni_ranking():
 # =====================================
 
 def get_room_oni_card(room_id, card_no):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1033,7 +1117,6 @@ def get_room_oni_card(room_id, card_no):
 
 
 def get_all_room_oni_cards(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1057,7 +1140,6 @@ def update_room_oni_card(
     current_name=None,
     start_time=_UNSET
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1065,7 +1147,6 @@ def update_room_oni_card(
 
     # 新しい鬼を登録するときはタイマー開始
     if start_time is _UNSET:
-
         if current_user_id or current_name:
             start_time = _now()
         else:
@@ -1092,7 +1173,6 @@ def add_room_oni_history(
     user_name,
     seconds
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1113,7 +1193,6 @@ def add_room_oni_history(
 
 
 def get_room_oni_ranking(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1129,7 +1208,6 @@ def get_room_oni_ranking(room_id):
     totals = {}
 
     for row in result.data or []:
-
         name = row.get("user_name", "不明")
 
         totals[name] = (
@@ -1158,7 +1236,6 @@ def get_room_oni_ranking(room_id):
 # =====================================
 
 def get_room_items(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1176,7 +1253,6 @@ def get_room_items(room_id):
 
 
 def get_room_item(room_id, item_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1194,7 +1270,6 @@ def get_room_item(room_id, item_id):
 # =====================================
 
 def get_active_match(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1217,7 +1292,6 @@ def get_active_match(room_id):
 
 
 def get_match_player_stats(match_id, user_id):
-
     return _get_one(
         "match_player_stats",
         match_id=int(match_id),
@@ -1230,7 +1304,6 @@ def get_match_player_stats(match_id, user_id):
 # =====================================
 
 def start_match(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1267,10 +1340,8 @@ def start_match(room_id):
     match_id = match["id"]
 
     try:
-
         # 全参加者の試合開始時ポイントを保存
         for user_id in member_ids:
-
             stats = get_room_user_stats(
                 room_id,
                 user_id
@@ -1298,7 +1369,6 @@ def start_match(room_id):
             }).execute()
 
     except Exception:
-
         # 初期化に失敗した試合を残さない
         supabase.table("match_player_stats").delete().eq(
             "match_id", match_id
@@ -1312,7 +1382,6 @@ def start_match(room_id):
 
     return match
 
-
 # =====================================
 # 試合中のポイント獲得
 # =====================================
@@ -1322,7 +1391,6 @@ def add_match_points(
     user_id,
     amount
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None or not _is_valid_amount(amount):
@@ -1401,7 +1469,6 @@ def consume_match_points(
     user_id,
     amount
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None or not _is_valid_amount(amount):
@@ -1478,7 +1545,6 @@ def add_match_item_usage(
     item_id,
     item_name=None
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1535,7 +1601,6 @@ def add_match_item_usage(
 # =====================================
 
 def finish_match(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1557,7 +1622,6 @@ def finish_match(room_id):
     )
 
     for player in result.data or []:
-
         room_stats = get_room_user_stats(
             room_id,
             player["user_id"]
@@ -1601,7 +1665,6 @@ def finish_match(room_id):
 # =====================================
 
 def get_match_result(match_id):
-
     match_id = _safe_int(match_id)
 
     if match_id <= 0:
@@ -1625,7 +1688,6 @@ def get_match_result(match_id):
     players = []
 
     for row in result.data or []:
-
         user_data = row.get("users") or {}
 
         players.append({
@@ -1667,7 +1729,6 @@ def get_match_result(match_id):
     most_item_user = None
 
     if players:
-
         candidate = max(
             players,
             key=lambda x: x["item_count"]
@@ -1683,7 +1744,6 @@ def get_match_result(match_id):
     duration_seconds = 0
 
     if started_at and ended_at:
-
         try:
             start = datetime.fromisoformat(
                 started_at.replace("Z", "+00:00")
@@ -1727,7 +1787,6 @@ def get_match_result(match_id):
 # =====================================
 
 def get_room_user_items(room_id, user_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1744,7 +1803,6 @@ def get_room_user_items(room_id, user_id):
     items = []
 
     for row in result.data or []:
-
         item = get_room_item(
             room_id,
             row.get("item_id")
@@ -1778,7 +1836,6 @@ def buy_room_item(
     user_id,
     item_id
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1807,7 +1864,6 @@ def buy_room_item(
 
     # ポイント消費
     if price > 0:
-
         if not consume_match_points(
             room_id,
             user_id,
@@ -1827,7 +1883,6 @@ def buy_room_item(
     )
 
     if existing.data:
-
         row = existing.data[0]
 
         update_result = (
@@ -1845,7 +1900,6 @@ def buy_room_item(
             return False
 
     else:
-
         insert_result = (
             supabase.table("user_items")
             .insert({
@@ -1862,7 +1916,6 @@ def buy_room_item(
 
     return True
 
-
 # =====================================
 # ルーム別アイテム使用
 # =====================================
@@ -1872,7 +1925,6 @@ def use_room_item(
     user_id,
     item_id
 ):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -1942,7 +1994,6 @@ def use_room_item(
 # =====================================
 
 def get_user_items(user_id):
-
     room_id = _get_active_room_id(user_id)
 
     if room_id is not None:
@@ -1963,11 +2014,9 @@ def get_user_items(user_id):
 
 
 def buy_item(user_id, item_id):
-
     room_id = _get_active_room_id(user_id)
 
     if room_id is not None:
-
         return buy_room_item(
             room_id,
             user_id,
@@ -2023,7 +2072,6 @@ def buy_item(user_id, item_id):
     )
 
     if existing.data:
-
         row = existing.data[0]
 
         supabase.table("user_items").update({
@@ -2036,7 +2084,6 @@ def buy_item(user_id, item_id):
         ).execute()
 
     else:
-
         supabase.table("user_items").insert({
             "user_id": user_id,
             "item_id": int(item_id),
@@ -2047,11 +2094,9 @@ def buy_item(user_id, item_id):
 
 
 def use_item(user_id, item_id):
-
     room_id = _get_active_room_id(user_id)
 
     if room_id is not None:
-
         return use_room_item(
             room_id,
             user_id,
@@ -2097,7 +2142,6 @@ def use_item(user_id, item_id):
 # =====================================
 
 def reset_room_for_rematch(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -2123,7 +2167,6 @@ def reset_room_for_rematch(room_id):
 # =====================================
 
 def delete_room(room_id):
-
     room_id = _room_id(room_id)
 
     if room_id is None:
@@ -2143,15 +2186,48 @@ def delete_room(room_id):
 
     member_ids = get_room_member_ids(room_id)
 
-    # 所属ルームを初期ルームへ戻す
+    # 解散対象のルームを選択中のユーザーだけ切り替える
     for user_id in member_ids:
+        user = get_user(user_id)
+
+        if not user:
+            continue
+
+        if _room_id(user.get("active_room_id")) != room_id:
+            continue
+
+        # 解散後も所属している別ルームを探す
+        remaining_result = (
+            supabase.table("room_members")
+            .select("room_id,joined_at")
+            .eq("user_id", user_id)
+            .neq("room_id", room_id)
+            .order("joined_at")
+            .execute()
+        )
+
+        next_room_id = None
+
+        for row in remaining_result.data or []:
+            candidate_id = _room_id(
+                row.get("room_id")
+            )
+
+            if candidate_id is None:
+                continue
+
+            candidate_room = get_room(candidate_id)
+
+            if candidate_room and candidate_room.get(
+                "is_active", True
+            ):
+                next_room_id = candidate_id
+                break
 
         supabase.table("users").update({
-            "active_room_id": DEFAULT_ROOM_ID
+            "active_room_id": next_room_id
         }).eq(
             "user_id", user_id
-        ).eq(
-            "active_room_id", room_id
         ).execute()
 
     # 試合IDを取得
@@ -2169,7 +2245,6 @@ def delete_room(room_id):
 
     # 試合に紐づくデータを削除
     for match_id in match_ids:
-
         supabase.table("match_item_usage").delete().eq(
             "match_id", match_id
         ).execute()
@@ -2213,11 +2288,14 @@ def delete_room(room_id):
     ).execute()
 
     # ルーム本体
-    supabase.table("rooms").delete().eq(
-        "room_id", room_id
-    ).execute()
+    result = (
+        supabase.table("rooms")
+        .delete()
+        .eq("room_id", room_id)
+        .execute()
+    )
 
-    return True
+    return bool(result.data)
 
 
 # =====================================
@@ -2275,7 +2353,6 @@ def reset_all_data():
     cards = get_all_oni_cards()
 
     for card in cards:
-
         update_oni_card(
             card["card_no"],
             None,
@@ -2291,7 +2368,6 @@ def reset_all_data():
     )
 
     for card in room_cards_result.data or []:
-
         update_room_oni_card(
             card["room_id"],
             card["card_no"],
